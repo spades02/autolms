@@ -28,7 +28,7 @@ export default function Home() {
             <Link href={"/main"}>
               <Button>Get Started</Button>
             </Link>
-            <Link href={"/main"}>
+            <Link href={"/signup"}>
               <Button className="bg-blue-600 text-white hover:bg-blue-500">
                 Sign Up
               </Button>
