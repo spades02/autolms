@@ -1,7 +1,6 @@
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import TextAnimation from "@/components/ui/TextAnimation";
-import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import Link from "next/link";
 
 export default function Home() {
@@ -26,8 +25,10 @@ export default function Home() {
             </p>
           </div>
           <div className="flex gap-2 m-6">
-            <Button>Get Started</Button>
-            <Link href={"/signup"}>
+            <Link href={"/upload"}>
+              <Button>Get Started</Button>
+            </Link>
+            <Link href={"/main"}>
               <Button className="bg-blue-600 text-white hover:bg-blue-500">
                 Sign Up
               </Button>

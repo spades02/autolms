@@ -7,7 +7,7 @@ import Link from "next/link";
 
 export default function Topbar() {
   return (
-    <div className="dark:shadow-2xl shadow-xl flex w-full gap-96 justify-between mt-2">
+    <div className="dark:shadow-2xl shadow-xl top-0 flex w-full gap-96 justify-between mt-2">
       <div className="ml-4 mt-2">
         <Link href={"/"}>
           <Button variant="outline" size="icon">

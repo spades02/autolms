@@ -1,20 +1,20 @@
-import { SignupForm } from '@/components/ui/SignupForm'
-import React from 'react'
-import Topbar from '@/components/ui/Topbar';
+import LoginForm from '@/components/ui/LoginForm';
 import Sidebar from '@/components/ui/Sidebar';
+import Topbar from '@/components/ui/Topbar'
+import React from 'react'
 
-export default function Signup() {
+export default function Login() {
   return (
-    <div>
+    <div className='h-4/5'>
       <Topbar />
       <div className="flex flex-row">
-        <Sidebar/>
+        <Sidebar />
         <div className="flex flex-col mt-2 grow h-screen">
           <div className="pt-16 px-60">
             <h2 className="scroll-m-20 border-b pb-2 mb-2 text-3xl font-semibold tracking-tight first:mt-0">
-              Sign up with email
+              Login with your account
             </h2>
-            <SignupForm />
+            <LoginForm />
           </div>
         </div>
       </div>

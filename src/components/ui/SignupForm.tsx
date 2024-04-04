@@ -43,7 +43,7 @@ export function SignupForm() {
   const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
 
-  const { toast } = useToast();
+    const { toast } = useToast();
 
   // 1. Define your form.
   const form = useForm<z.infer<typeof SignupSchema>>({
@@ -168,7 +168,7 @@ export function SignupForm() {
           <Button type="submit">Create Account</Button>
           <div className="flex gap-1">
             Already have an account?
-            <Link className="text-blue-500 hover:underline" href={"#"}>
+            <Link className="text-blue-500 hover:underline" href={"/login"}>
               Sign in
             </Link>
           </div>
