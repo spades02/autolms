@@ -25,7 +25,7 @@ export default function Home() {
             </p>
           </div>
           <div className="flex gap-2 m-6">
-            <Link href={"/upload"}>
+            <Link href={"/main"}>
               <Button>Get Started</Button>
             </Link>
             <Link href={"/main"}>
