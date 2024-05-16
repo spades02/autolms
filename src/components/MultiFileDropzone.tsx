@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  CheckCircleIcon,
   FileIcon,
   LucideFileWarning,
   Trash2Icon,
   UploadCloudIcon,
 } from "lucide-react";
+import { IoTrashOutline } from "react-icons/io5";
 import * as React from "react";
 import { useDropzone, type DropzoneOptions } from "react-dropzone";
 import { twMerge } from "tailwind-merge";
@@ -68,6 +68,7 @@ const MultiFileDropzone = React.forwardRef<HTMLInputElement, InputProps>(
       isDragAccept,
       isDragReject,
     } = useDropzone({
+      accept: { "video/*": [] },
       disabled,
       onDrop: (acceptedFiles) => {
         const files = acceptedFiles;
@@ -142,6 +143,7 @@ const MultiFileDropzone = React.forwardRef<HTMLInputElement, InputProps>(
                 })}
               >
                 <input ref={ref} {...getInputProps()} />
+
                 <div className="flex flex-col items-center justify-center text-xs text-gray-400">
                   <UploadCloudIcon className="mb-1 h-7 w-7" />
                   <div className="text-gray-400">
@@ -190,7 +192,16 @@ const MultiFileDropzone = React.forwardRef<HTMLInputElement, InputProps>(
                     ) : progress !== "COMPLETE" ? (
                       <div>{Math.round(progress)}%</div>
                     ) : (
-                      <CheckCircleIcon className="shrink-0 text-green-600 dark:text-gray-400" />
+                      <button
+                        className="rounded-md p-1 transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        onClick={() => {
+                          void onChange?.(
+                            value.filter((_, index) => index !== i)
+                          );
+                        }}
+                      >
+                        <Trash2Icon className="shrink-0" />
+                      </button>
                     )}
                   </div>
                 </div>

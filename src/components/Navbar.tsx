@@ -3,6 +3,8 @@ import React from "react";
 import logo from "../../public/autolms-nav.png";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ModeToggle } from "./ui/ModeToggle";
+import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
+import { Button } from "./ui/button";
 
 export default function Navbar() {
   return (
@@ -14,12 +16,20 @@ export default function Navbar() {
             AutoLMS
           </h1>
         </div>
-        <div className="flex">
+        <div className="flex gap-2 mr-4">
           <ModeToggle />
-          <Avatar className="ml-4">
+          <SignedOut>
+            <Button className="bg-blue-600 text-white hover:bg-blue-500">
+              <SignInButton />
+            </Button>
+          </SignedOut>
+          <SignedIn>
+              <UserButton />
+          </SignedIn>
+          {/* <Avatar className="ml-4">
             <AvatarImage src="https://github.com/shadcn.png" />
             <AvatarFallback>CN</AvatarFallback>
-          </Avatar>
+          </Avatar> */}
         </div>
       </div>
     </div>

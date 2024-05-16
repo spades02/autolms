@@ -5,9 +5,11 @@ import {
   type FileState,
 } from "@/components/MultiFileDropzone";
 import { useEdgeStore } from "@/lib/edgestore";
+import { currentUser } from "@clerk/nextjs/server";
 import { useState } from "react";
 
 export function Upload() {
+  const fileArray:string[] = [];
   const [fileStates, setFileStates] = useState<FileState[]>([]);
   const { edgestore } = useEdgeStore();
 
@@ -20,6 +22,7 @@ export function Upload() {
       if (fileState) {
         fileState.progress = progress;
       }
+
       return newFileStates;
     });
   }
@@ -54,7 +57,13 @@ export function Upload() {
                     }
                   },
                 });
-                console.log(res);
+                console.log(res.url);
+                fileArray.push(res.url);
+                fileArray.forEach((file, index) => {
+                  const formData = new FormData();
+                  // console.log(filesArray[index]);
+                  formData.append(`video${index}`, file);
+                });
               } catch (err) {
                 updateFileProgress(addedFileState.key, "ERROR");
               }
