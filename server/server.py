@@ -39,7 +39,7 @@ CORS(app)
 def resource_generation(text):
 
     try:        
-        OPENAI_API_KEY = os.getenv("openai.api_key")
+        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         
         print('in function')
         completion = openai.ChatCompletion.create(
