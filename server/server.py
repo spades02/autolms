@@ -31,6 +31,10 @@ firebase_admin.initialize_app(creds, {
 
 # bucket = storage.bucket()
 
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
