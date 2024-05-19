@@ -1,6 +1,7 @@
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import TextAnimation from "@/components/ui/TextAnimation";
+import { SignedOut } from "@clerk/nextjs";
 import Link from "next/link";
 
 export default function Home() {
@@ -25,14 +26,16 @@ export default function Home() {
             </p>
           </div>
           <div className="flex gap-2 m-6">
-            <Link href={"/main"}>
+            <Link href={"/sign-up"}>
               <Button>Get Started</Button>
             </Link>
-            <Link href={"/signup"}>
-              <Button className="bg-blue-600 text-white hover:bg-blue-500">
-                Sign Up
-              </Button>
-            </Link>
+            <SignedOut>
+              <Link href={"/sign-up"}>
+                <Button className="bg-blue-600 text-white hover:bg-blue-500">
+                  Sign Up
+                </Button>
+              </Link>
+            </SignedOut>
           </div>
         </div>
       </div>

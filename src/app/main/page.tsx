@@ -12,8 +12,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import getClerkUserId, { getUserById } from "@/actions/user.action";
+import { createProject } from "@/actions/project.action";
+import { usePathname } from "next/navigation";
 
 export default function main() {
+  const pathname = usePathname();
+
   var [quiz_check, set_quiz_check] = useState(false);
   var [asgn_check, set_asgn_check] = useState(false);
   var [notes_check, set_notes_check] = useState(false);
@@ -73,8 +78,6 @@ export default function main() {
       if (files) {
         const file = files[0];
       }
-      console.log(filesArray);
-      console.log(filesArray.length);
       // console.log(file)
       if (!files) {
         console.error("No file selected");
@@ -180,7 +183,10 @@ export default function main() {
       // (document.getElementById("overlay") as HTMLElement).style.display =
       //   "block";
       console.log("siuuuuu");
-      const response = await fetch("http://127.0.0.1:5000/generate_content", {
+      if(uploadRes){
+      formData.append("files", uploadRes.url)
+      }
+      fetch("http://127.0.0.1:5000/generate_content", {
         method: "POST",
         body: formData,
       })
@@ -232,6 +238,24 @@ export default function main() {
           console.log(error);
         });
     }
+
+    async function saveProject() {
+      const userId = await getClerkUserId();
+      const mongoUser = await getUserById(userId);
+      const mongoUserId = JSON.stringify(mongoUser);
+      try {
+        const session = await createProject({
+          title : "hello",
+          videoLinks: ["link1","Link2"],
+          author: mongoUserId,
+          path: pathname
+        });
+
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
   };
   return (
     <div>
@@ -276,7 +300,11 @@ export default function main() {
                         });
                         if (uploadRes) {
                           addUpload(uploadRes);
-                          console.log(uploads);
+                          //console.log(uploads);
+                          uploads.forEach(upload => {
+                            //console.log(uploads)
+                          });
+                          
                         }
                       } catch (err) {
                         updateFileProgress(addedFileState.key, "ERROR");
@@ -464,21 +492,7 @@ export default function main() {
             <Label htmlFor="message">Your message</Label>
             <Textarea placeholder="Type your message here." id="message" />
           </div>
-          {uploadRes && (
-            <div
-              className="relative w-full"
-              style={{ paddingBottom: "56.25%" }}
-            >
-              <video
-                className="absolute inset-0 w-full h-full object-cover"
-                controls
-                autoPlay
-              >
-                <source src={uploadRes.url} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            </div>
-          )}
+          
           <div></div>
         </div>
       </div>

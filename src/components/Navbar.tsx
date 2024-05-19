@@ -24,7 +24,7 @@ export default function Navbar() {
             </Button>
           </SignedOut>
           <SignedIn>
-              <UserButton />
+              <UserButton afterSignOutUrl="/"/>
           </SignedIn>
           {/* <Avatar className="ml-4">
             <AvatarImage src="https://github.com/shadcn.png" />

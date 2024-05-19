@@ -34,7 +34,7 @@ const edgeStoreRouter = es.router({
     ]
   })
   .beforeUpload(({ ctx, input, fileInfo }) => {
-      console.log('beforeUpload', ctx, input, fileInfo);
+      //console.log('beforeUpload', ctx, input, fileInfo);
       return true; // allow upload
     })
    .beforeDelete(({ ctx, fileInfo }) => {
