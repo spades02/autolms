@@ -16,7 +16,7 @@ import getClerkUserId, { getUserById } from "@/actions/user.action";
 import { createProject } from "@/actions/project.action";
 import { usePathname } from "next/navigation";
 
-export default function main() {
+export default function Main() {
   const pathname = usePathname();
 
   var [quiz_check, set_quiz_check] = useState(false);
