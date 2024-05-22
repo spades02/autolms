@@ -93,18 +93,3 @@ export async function updateUser(params: UpdateUserParams) {
     }
   }
   
-
-  export async function getProjectByID(params: GetSessionByIdParams) {
-    try {
-       await connectToDatabase();
-
-        const { sessionId } = params;
-        const session = await Project.findById(sessionId)
-            .populate({ path: "author", model: User , select: "_id name picture clerkId"});
-        
-        return JSON.parse(JSON.stringify(session)) ;
-
-    }catch(error) {
-        console.log(error);
-    }
-}
