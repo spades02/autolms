@@ -26,7 +26,7 @@ export default function Home() {
             </p>
           </div>
           <div className="flex gap-2 m-6">
-            <Link href={"/sign-up"}>
+            <Link href={"/create"}>
               <Button>Get Started</Button>
             </Link>
             <SignedOut>

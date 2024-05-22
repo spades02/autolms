@@ -20,21 +20,16 @@ const es = initEdgeStore.context<Context>().create();
  * This is the main router for the Edge Store buckets.
  */
 const edgeStoreRouter = es.router({
-  protectedFiles: es
+  publicFiles: es
   .fileBucket({
     // maxSize: 1024 * 1024 * 10, // 10MB
     accept: ['video/mkv', 'video/mp4'], // wildcard also works: ['image/*']
+    
   })
   .path(({ ctx }) => [{owner:ctx.userId}])
-  .accessControl({
-    OR:[
-        {
-            userId: {path: "owner"},
-        }
-    ]
-  })
+
   .beforeUpload(({ ctx, input, fileInfo }) => {
-      //console.log('beforeUpload', ctx, input, fileInfo);
+      console.log('beforeUploadctx', ctx,'input', input,'file info', fileInfo);
       return true; // allow upload
     })
    .beforeDelete(({ ctx, fileInfo }) => {

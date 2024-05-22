@@ -52,11 +52,7 @@ def resource_generation(text):
         )
 
         print(completion.choices[0].message)
-        sum = completion.choices[0].message.content
-        # doc = Document()
-        # doc.add_paragraph(sum)  
-        # text_file_path = 'summarized_text.docx'
-        # doc.save(text_file_path)  
+        sum = completion.choices[0].message.content 
         return sum
     except Exception as e:
         print(f"An error occurred: {e}")

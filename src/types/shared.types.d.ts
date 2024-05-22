@@ -11,6 +11,12 @@ export interface GetSessionParams {
   export interface CreateSessionParams {
     title: string;
     videoLinks: string[];
+    quiz: string;
+    asgn: string;
+    notes: string;
+    proj: string;
+    paper: string;
+    summary: string;
     author: Schema.Types.ObjectId | IUser;
     path: string;
   }
@@ -34,7 +40,7 @@ export interface GetSessionParams {
   }
 
   export interface GetSessionByIdParams {
-    sessionId: string;
+    projectId: string;
   }
 
   export interface ToggleSaveSessionParams {
