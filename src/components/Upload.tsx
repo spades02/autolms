@@ -42,7 +42,7 @@ export function Upload() {
           await Promise.all(
             addedFiles.map(async (addedFileState) => {
               try {
-                const res = await edgestore.protectedFiles.upload({
+                const res = await edgestore.publicFiles.upload({
                   file: addedFileState.file,
                   options: {
                     temporary: true,
