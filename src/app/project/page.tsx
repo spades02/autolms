@@ -28,11 +28,11 @@ const ProjectList = async() => {
         {projects && projects.length > 0 ? (
           projects.map((project: IProject) => (
             <div
-              key={project._id}
+              key={project._id.toString()}
               className="grid self-center place-items-center align-middle m-5"
             >
               <div>
-                <Link href={`/project/${project._id}`}>
+                <Link href={`/project/${project._id.toString()}`}>
                   <Button variant={"outline"} className="h-48 w-48">
                     {project.title}
                   </Button>

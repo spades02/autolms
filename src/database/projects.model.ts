@@ -1,7 +1,8 @@
-import { Schema, models, model, Document } from "mongoose";
+import { Schema, models, model, Document, Types } from "mongoose";
 
 export interface IProject extends Document {
-    title: string;    
+    _id: Types.ObjectId;
+    title: string;
     videoLinks: string[];  // Change to an array of strings
     quiz : string,
     asgn: string,
