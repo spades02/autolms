@@ -4,7 +4,6 @@ import { ReactTyped } from 'react-typed';
 
 export default function TextAnimation() {
   return (
-    
       <ReactTyped
         strings={["Teachers", "Lecturers", "Course Instructors"]}
         typeSpeed={100}
@@ -12,6 +11,5 @@ export default function TextAnimation() {
         backSpeed={20}
         showCursor={true}
       />
-    
   );
 }

@@ -7,7 +7,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useEdgeStore } from "@/lib/edgestore";
 import { currentUser } from "@clerk/nextjs/server";
 import Topbar from "@/components/ui/Topbar";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,9 +17,28 @@ import getClerkUserId, { getUserById } from "@/actions/user.action";
 import { createProject } from "@/actions/project.action";
 import { usePathname } from "next/navigation";
 import { DrawerDialogDemo } from "@/components/Generated";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 export default function Create() {
   const pathname = usePathname();
+
+  const [uploading, setUploading] = useState(true);
+  const [username, setUsername] = useState<string | null>(null);
+  const [generated, setGenerated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const userId = await getClerkUserId();
+        const user = await getUserById(userId);
+        setUsername(user?.username ?? null);
+      } catch (err) {
+        console.error("Failed to load username", err);
+      }
+    })();
+  }, []);
 
   const [quiz_check, set_quiz_check] = useState(false);
   const [asgn_check, set_asgn_check] = useState(false);
@@ -111,7 +130,9 @@ export default function Create() {
       });
 
       const data = await response.json();
-      tempAudios.push(data.message);
+      console.log("data", data)
+      console.log("data message", data.message)
+      tempAudios.push(data);
     }
 
     setAudios(tempAudios);
@@ -120,10 +141,16 @@ export default function Create() {
     // ]);
 
     setLoading(false);
-    sendAudioToTranscriptionApi(audios);
+  // pass the freshly-collected audio URLs (tempAudios) instead of
+  // the state variable `audios` which may not be updated yet
+  sendAudioToTranscriptionApi(tempAudios);
   };
 
   const sendAudioToTranscriptionApi = async (url: string[]) => {
+    if (!url || url.length === 0) {
+      console.error("sendAudioToTranscriptionApi: no urls provided");
+      return;
+    }
     const response = await fetch("/api/audio-text", {
       method: "POST",
       headers: {
@@ -138,7 +165,7 @@ export default function Create() {
     // setTranscriptions(["course on database , today we will learn primary key"])
     // setTranscriptions((prevTranscriptions) => [...prevTranscriptions, transcriptionText]);
     // return data.text;
-    generate();
+    // generate();
   };
 
   const processAudios = async () => {
@@ -159,20 +186,6 @@ export default function Create() {
 
   const generate = async () => {
     const formData = new FormData();
-
-    const videoError = document.getElementById(
-      "video_error_block"
-    ) as HTMLElement;
-    const contentSelectError = document.getElementById(
-      "content_select_error_block"
-    ) as HTMLElement;
-    const errorInput = document.getElementById(
-      "error_input"
-    ) as HTMLInputElement;
-
-    videoError.style.display = "none";
-    errorInput.style.display = "none";
-
     if (
       quiz_check === false &&
       asgn_check === false &&
@@ -182,15 +195,22 @@ export default function Create() {
       summary_check === false &&
       promptInput === ""
     ) {
-      contentSelectError.style.display = "block";
-      videoError.style.display = "none";
+      setError("Please select or add a resource you want to generate!")
     } else {
-      contentSelectError.style.display = "none";
+      // const error: string = await generateContent(
+      //   `If the following content does not look like a transcription of a lecture video. Just return "ERROR!" as a response, nothing more nothing less!`
+      // );
+      // if (error === "ERROR!"){
+      //   return "Provided content is not from a lecture video"
+      // }
+
       if (quiz_check === true) {
         console.log("quizzz check", transcriptions);
         const quiz: string = await generateContent(
           `Following given content is the text generated from an educational video. Generate a quiz that can be solved by someone who has the following knowledge. Be restricted to this given text, don’t use your own vector space for information on the topic. The quiz should contain at least 10 MCQs. Text:${transcriptions}`
         );
+
+        console.log("quiz", quiz)
 
         if (quiz) {
           set_incoming_quiz(quiz);
@@ -211,7 +231,7 @@ export default function Create() {
       }
       if (project_check === true) {
         const proj: string = await generateContent(
-          `Following given content is the text generated from an educational video. Generate a project idea such that the person who has watched the video(s) can implement their newly attained knowledge from the video to practically apply the knowledge.Don't try to explain everything, just give some basic idea for practical implementation of the knowledge. Be restricted to this given text, don’t use your own vector space. Text:${transcriptions}`
+          `Following given content is the text generated from an educational video. Generate a project idea such that the person who has watched the video(s) can implement their newly attained knowledge from the video to practically apply the knowledge. Don't try to explain everything, just give some basic idea for practical implementation of the knowledge. Be restricted to this given text, don’t use your own vector space. Text:${transcriptions}`
         );
         set_incoming_proj(proj);
       }
@@ -232,18 +252,8 @@ export default function Create() {
 
   async function generateContent(text: string) {
     console.log(text);
-    const videoError = document.getElementById(
-      "video_error_block"
-    ) as HTMLElement;
-    const contentSelectError = document.getElementById(
-      "content_select_error_block"
-    ) as HTMLElement;
-    const errorInput = document.getElementById(
-      "error_input"
-    ) as HTMLInputElement;
-
-    videoError.style.display = "none";
-    errorInput.style.display = "none";
+    
+    setError(null);
 
     try {
       const res = await fetch("/api/chatgpt", {
@@ -254,18 +264,14 @@ export default function Create() {
       });
 
       const result = await res.json();
-      console.log("resuulllltttt", result);
-      const result_string = JSON.stringify(result);
-      console.log("sheikh chillii", result_string);
       return result;
     } catch (error: any) {
       console.error(error);
-      errorInput.style.display = "block";
-      errorInput.value = error;
+      setError(error.message || "An unexpected error occurred");
     }
-    // finally{
-    //   saveProject();
-    // }
+    finally{
+      setGenerated(true);
+    }
   }
 
   async function saveProject() {
@@ -294,12 +300,13 @@ export default function Create() {
       <Topbar />
       <div>
         <div className="grid grid-cols-2 gap-8 justify-between sm:flex-row mx-8">
-          <div className="mt-8 col-span-1">
+          <div className="mt-8 col-span-1 border rounded-md">
             <div className="p-4 outline-1 m-2 shadow-xl rounded-lg w-full">
               <h1 className="scroll-m-20 pb-2 text-2xl font-extrabold tracking-tight lg:text-3xl">
                 Upload
               </h1>
-              <ScrollArea className="h-[300px] w-full rounded-md border p-4">
+              <span className="font-extralight">Upload the video lectures for which you want the resources</span>
+              <ScrollArea className="h-[300px] w-full rounded-md p-4 mt-2">
                 <MultiFileDropzone
                   className="w-full"
                   value={fileStates}
@@ -314,6 +321,7 @@ export default function Create() {
                           const res = await edgestore.publicFiles.upload({
                             file: addedFileState.file,
                             onProgressChange: async (progress) => {
+                              setUploading(true);
                               updateFileProgress(addedFileState.key, progress);
                               if (progress === 100) {
                                 // wait 1 second to set it to complete
@@ -321,6 +329,7 @@ export default function Create() {
                                 await new Promise((resolve) =>
                                   setTimeout(resolve, 1000)
                                 );
+                                setUploading(false);
                                 updateFileProgress(
                                   addedFileState.key,
                                   "COMPLETE"
@@ -340,7 +349,7 @@ export default function Create() {
               </ScrollArea>
             </div>
           </div>
-          <div className="col-span-1">
+          <div className="col-span-1 border rounded-md">
             <div className="flex flex-col rounded-lg shadow-2xl p-4  gap-4 m-4">
               <div className="mx-4 mt-2">
                 <h1 className="scroll-m-20 text-3xl font-extrabold tracking-tight lg:text-4xl">
@@ -452,31 +461,24 @@ export default function Create() {
                   placeholder="Enter any other resource name you want to generate..."
                 />
               </div>
+              {error && (
+                <Alert variant="destructive" className="mb-4 relative">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                  <button
+                    onClick={() => setError(null)}
+                    className="absolute top-2 right-2 text-sm hover:opacity-70"
+                  >
+                    ✕
+                  </button>
+                </Alert>
+              )}
               <div>
-                <div id="error_block">
-                  <p
-                    id="video_error_block"
-                    className="hidden text-red-500 ml-2 text-left mb-2"
-                  >
-                    Please select a video
-                  </p>
-                  <p
-                    id="content_select_error_block"
-                    className="hidden text-red-500 ml-2 text-left mb-2"
-                  >
-                    Please add or select a resource
-                  </p>
-                  <p
-                    id="backend_error_bloack"
-                    className="hidden text-red-500 ml-2 text-left mb-2"
-                  >
-                    <input type="text" id="error_input" />
-                  </p>
-                </div>
                 <Button
                   className="w-full"
                   onClick={sendUrlsToApi} //check this
-                  disabled={loading}
+                  disabled={loading || uploading}
                 >
                   {loading ? "Processing..." : "Generate"}
                 </Button>
@@ -485,21 +487,20 @@ export default function Create() {
           </div>
           {videoUrls && videoUrls.length > 0 && (
             <div className="col-span-2 w-full">
-              <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+              <ScrollArea className="w-full whitespace-nowrap rounded-md border mb-8">
                 <div className="flex w-max space-x-4 p-4">
                   {videoUrls.map((url, index) => (
                     <div key={index} className="shrink-0">
                       <div className="overflow-hidden rounded-md">
                         <video width="320" height="240" controls preload="none">
                           <source src={url} type="video/mp4" />
-                          Your browser does not support the video tag.
                         </video>
                       </div>
                       <figcaption className="pt-2 text-xs text-muted-foreground">
                         <span className="font-semibold text-foreground">
-                          Video {index + 1}
+                          Video {index + 1 } &nbsp; 
                         </span>
-                        by username
+                        by {username ?? "Unknown"} 
                       </figcaption>
                     </div>
                   ))}
@@ -510,8 +511,8 @@ export default function Create() {
           )}
         </div>
 
-        <div className="m-4 rounded-xl shadow-2xl drop-shadow-2xl">
-          <div>
+        {generated && <div className="m-4 rounded-xl shadow-2xl drop-shadow-2xl">
+          <div className="mx-8 mt-8">
             <h1 className="scroll-m-20 text-3xl font-extrabold tracking-tight lg:text-4xl">
               Generated Resources
             </h1>
@@ -558,7 +559,7 @@ export default function Create() {
               <Button onClick={saveProject}>Save Project</Button>
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );

@@ -8,10 +8,13 @@ export const POST = async (req: Request, res: NextResponse) => {
   });
   const { url } = await req.json();
 
-  const audio_url = url[0];
-  // const audio_url = JSON.stringify(url);
+  // Validate incoming payload
+  if (!url || (Array.isArray(url) && url.length === 0)) {
+    return NextResponse.json({ error: "audio url not provided" }, { status: 400 });
+  }
 
-  
+  // allow either array-of-urls or a single string url
+  const audio_url = Array.isArray(url) ? url[0] : url;
 
   try {
     console.log(audio_url)

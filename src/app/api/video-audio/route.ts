@@ -18,9 +18,9 @@ export const POST = async (req: Request, res : NextResponse) => {
         });
 
         const responsedata = await response.json();
-        console.log(responsedata)
+        console.log(responsedata.data)
         
-        return NextResponse.json(responsedata);
+        return NextResponse.json(responsedata.data);
 
         
     } catch (error: any) {

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 
-
 export const POST = async ( req: Request, res: Response ) => {
-
 
     const { text } = await req.json();
 
@@ -16,13 +14,10 @@ export const POST = async ( req: Request, res: Response ) => {
             body: JSON.stringify( {
                 model: "gpt-3.5-turbo",
                 messages: [
-
                     {
                         "role":"system",
                         "content": text
                     }
-
-                    
                 ],
             } )
         } );
@@ -33,9 +28,7 @@ export const POST = async ( req: Request, res: Response ) => {
 
         return Response.json(reply);
 
-
     } catch ( error: any ) {
         return NextResponse.json( { error: error.message } );
     }
-
 }
