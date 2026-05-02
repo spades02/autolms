@@ -8,7 +8,13 @@ const POLLING_TIMEOUT_MS = 600_000; // 10 min, plenty for long lectures
 const MAX_ATTEMPTS = 3;
 
 export const POST = async (req: Request) => {
-  const apiKey = process.env.ASSEMBLYAI_API_KEY ?? "38a2df8b8f954a82b2d6742f824c45cf";
+  const apiKey = process.env.ASSEMBLYAI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "ASSEMBLYAI_API_KEY not configured" },
+      { status: 500 }
+    );
+  }
   const client = new AssemblyAI({ apiKey });
 
   const { url } = await req.json();

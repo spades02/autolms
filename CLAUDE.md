@@ -23,23 +23,16 @@ python server/server.py   # binds 127.0.0.1:5000
 
 AutoLMS is a Next.js 14 App Router app that turns lecture videos into educational resources (quiz, assignment, notes, project idea, exam paper, summary). TypeScript with `@/*` aliased to `src/*`.
 
-### Two parallel generation pipelines
+### Generation pipeline
 
-The repo contains **two** independent end-to-end pipelines for the same feature. Know which one you're touching:
+Single end-to-end flow used by `src/app/create/page.tsx`:
 
-1. **Next.js / serverless pipeline** (the active flow used by `src/app/create/page.tsx`):
-   - User drops video files into `MultiFileDropzone` → uploaded to **EdgeStore** (`src/app/api/edgestore/[...edgestore]/route.ts`, mkv/mp4 only).
-   - Stored URLs are POSTed to `/api/video-audio` → proxies **ApyHub** `extract/video/audio/url` to get an mp3 URL.
-   - mp3 URL is POSTed to `/api/audio-text` → **AssemblyAI** transcription.
-   - Transcript is fed into prompts and POSTed to `/api/chatgpt` → **OpenAI** `gpt-3.5-turbo` chat completion. Each resource type (quiz/asgn/notes/proj/paper/summary) is a separate call.
-   - Final resources are saved via the `createProject` server action.
-
-2. **Flask pipeline** (`server/server.py`, used by the older `src/components/Prompts.tsx`):
-   - Single `POST /generate_content` endpoint that does the whole flow server-side: downloads videos, extracts audio with `moviepy`, transcribes with AssemblyAI, validates that the video is "educational" via an OpenAI yes/no check, then generates the requested resource bundle.
-   - Also exposes `/download_quiz`, `/download_asgn`, `/download_notes`, `/download_proj`, `/download_additionals` which build `.docx` files with `python-docx`.
-   - Hard-coded base URL `http://127.0.0.1:5000` in `Prompts.tsx`. This component is the legacy path; new work should go through the Next.js pipeline.
-
-`Prompts.tsx` and `create/page.tsx` look almost identical from the UI but call entirely different backends — don't copy logic between them without checking which pipeline you're in.
+- User drops video files into `MultiFileDropzone` → a naming `Dialog` opens → uploaded to **EdgeStore** (`src/app/api/edgestore/[...edgestore]/route.ts`, mkv/mp4 only).
+- Stored URLs are POSTed to `/api/video-audio`, which is now a **passthrough** that returns the original video URL (AssemblyAI accepts video URLs directly — the previous ApyHub video→audio step has been removed because its sync URL endpoint truncates long videos and no async/job variant exists).
+- The video URL is POSTed to `/api/audio-text` → **AssemblyAI** transcription. The route retries up to 3× on transient `fetch failed` / `ECONNRESET` / etc. and uses an explicit 10-min poll timeout for long lectures.
+- Transcript + per-resource prompts are POSTed in parallel to `/api/chatgpt` → **Vercel AI SDK** `generateText` against **Google Gemini** (`gemini-flash-latest` via `@ai-sdk/google`, free tier, no card). A strict system prompt forbids preambles and source-text references. Each selected built-in type (quiz/asgn/notes/proj/paper/summary) plus each non-empty custom prompt is one call.
+- Custom resources include a self-validating instruction: the model must reply with literal `INVALID_RESOURCE` if the requested name isn't a real educational resource format; the frontend filters those out and surfaces them as a rejection message.
+- Final resources are saved via the `createProject` server action.
 
 ### Auth + user sync
 
