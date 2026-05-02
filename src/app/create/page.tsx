@@ -18,12 +18,35 @@ import { createProject } from "@/actions/project.action";
 import { usePathname } from "next/navigation";
 import { DrawerDialogDemo } from "@/components/Generated";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertCircle,
+  AlignLeft,
+  Check,
+  ClipboardList,
+  FileText,
+  GraduationCap,
+  HelpCircle,
+  Lightbulb,
+  Loader2,
+  Plus,
+  Save,
+  Sparkles,
+  Sticker,
+  X,
+} from "lucide-react";
 
 export default function Create() {
   const pathname = usePathname();
 
-  const [uploading, setUploading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [generated, setGenerated] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +79,24 @@ export default function Create() {
   const [incoming_additionals, set_incoming_additionals] = useState("");
 
   const [videoUrls, setVideoUrls] = useState<string[]>([]);
+  const [videoNames, setVideoNames] = useState<string[]>([]);
+
+  const [nameDialog, setNameDialog] = useState<{
+    open: boolean;
+    defaultName: string;
+    value: string;
+    resolver: ((name: string) => void) | null;
+  }>({ open: false, defaultName: "", value: "", resolver: null });
+
+  const askForName = (defaultName: string): Promise<string> =>
+    new Promise((resolve) => {
+      setNameDialog({ open: true, defaultName, value: "", resolver: resolve });
+    });
+
+  const finishNameDialog = (chosen: string) => {
+    nameDialog.resolver?.(chosen);
+    setNameDialog({ open: false, defaultName: "", value: "", resolver: null });
+  };
   const [loading, setLoading] = useState(false);
   const [audios, setAudios] = useState<string[]>([]);
   const [transcriptions, setTranscriptions] = useState<string[]>([]);
@@ -110,62 +151,91 @@ export default function Create() {
     }
   };
 
-  const [promptInput, setPromptInput] = useState("");
+  const [customPrompts, setCustomPrompts] = useState<string[]>([]);
+  const [customResults, setCustomResults] = useState<
+    Array<{ name: string; content: string }>
+  >([]);
 
-  const handlePrompt = (e: any) => {
-    setPromptInput(e.target.value);
-  };
+  const addCustomPrompt = () =>
+    setCustomPrompts((prev) => [...prev, ""]);
+  const updateCustomPrompt = (idx: number, value: string) =>
+    setCustomPrompts((prev) => {
+      const next = [...prev];
+      next[idx] = value;
+      return next;
+    });
+  const removeCustomPrompt = (idx: number) =>
+    setCustomPrompts((prev) => prev.filter((_, i) => i !== idx));
 
   const sendUrlsToApi = async () => {
-    setLoading(true);
-    const tempAudios: string[] = [];
-
-    for (const url of videoUrls) {
-      const response = await fetch("/api/video-audio", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ url }),
-      });
-
-      const data = await response.json();
-      console.log("data", data)
-      console.log("data message", data.message)
-      tempAudios.push(data);
+    if (!videoUrls.length) {
+      setError("Upload at least one video first.");
+      return;
+    }
+    const hasCustom = customPrompts.some((p) => p.trim() !== "");
+    if (
+      !quiz_check &&
+      !asgn_check &&
+      !notes_check &&
+      !project_check &&
+      !paper_check &&
+      !summary_check &&
+      !hasCustom
+    ) {
+      setError("Please select or add a resource you want to generate!");
+      return;
     }
 
-    setAudios(tempAudios);
-    // setAudios([
-    //   "https://apyhub-outgoing.s3.eu-west-1.amazonaws.com/29dd8c51-b035-4d21-9a14-60df38a4c89c/video-audio/_extract_video_audio_url/video-clips/test-sample_2024-05-22T00%3A01%3A49.149.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIARJOHWS6LXQRAG7X6%2F20240522%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20240522T000149Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=e4e0e586bd3fcec75724f78bd01224358f76f1084d784349198584651f593e95",
-    // ]);
+    setError(null);
+    setLoading(true);
 
-    setLoading(false);
-  // pass the freshly-collected audio URLs (tempAudios) instead of
-  // the state variable `audios` which may not be updated yet
-  sendAudioToTranscriptionApi(tempAudios);
+    try {
+      const tempAudios: string[] = [];
+      for (const url of videoUrls) {
+        const response = await fetch("/api/video-audio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const data = await response.json();
+        tempAudios.push(data);
+      }
+      setAudios(tempAudios);
+
+      const transcript = await sendAudioToTranscriptionApi(tempAudios);
+      if (!transcript) {
+        setError("Could not transcribe the uploaded video(s).");
+        return;
+      }
+
+      await generate(transcript);
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message ?? "Something went wrong while generating resources.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const sendAudioToTranscriptionApi = async (url: string[]) => {
+  const sendAudioToTranscriptionApi = async (
+    url: string[]
+  ): Promise<string | null> => {
     if (!url || url.length === 0) {
       console.error("sendAudioToTranscriptionApi: no urls provided");
-      return;
+      return null;
     }
     const response = await fetch("/api/audio-text", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
     });
-    const data = await response.json();
-    console.log("data", data);
-    setTranscriptions([data]); //append the transcription
-    // const transcriptionText = "course on database, today we will learn mySQL queries"
-    // setTranscriptions(["course on database , today we will learn primary key"])
-    // setTranscriptions((prevTranscriptions) => [...prevTranscriptions, transcriptionText]);
-    // return data.text;
-    // generate();
+    const data = await response.json().catch(() => null);
+    if (!response.ok || typeof data !== "string" || !data) {
+      console.error("transcription failed", response.status, data);
+      return null;
+    }
+    setTranscriptions([data]);
+    return data;
   };
 
   const processAudios = async () => {
@@ -184,93 +254,120 @@ export default function Create() {
     setLoading(false);
   };
 
-  const generate = async () => {
-    const formData = new FormData();
-    if (
-      quiz_check === false &&
-      asgn_check === false &&
-      notes_check === false &&
-      project_check === false &&
-      paper_check === false &&
-      summary_check === false &&
-      promptInput === ""
-    ) {
-      setError("Please select or add a resource you want to generate!")
-    } else {
-      // const error: string = await generateContent(
-      //   `If the following content does not look like a transcription of a lecture video. Just return "ERROR!" as a response, nothing more nothing less!`
-      // );
-      // if (error === "ERROR!"){
-      //   return "Provided content is not from a lecture video"
-      // }
+  const generate = async (transcript: string) => {
+    const base = `Following given content is the text generated from an educational video. Be restricted to this given text, don’t use your own vector space.`;
 
-      if (quiz_check === true) {
-        console.log("quizzz check", transcriptions);
-        const quiz: string = await generateContent(
-          `Following given content is the text generated from an educational video. Generate a quiz that can be solved by someone who has the following knowledge. Be restricted to this given text, don’t use your own vector space for information on the topic. The quiz should contain at least 10 MCQs. Text:${transcriptions}`
-        );
+    const tasks: Array<{
+      enabled: boolean;
+      prompt: string;
+      set: (v: string) => void;
+    }> = [
+      {
+        enabled: quiz_check,
+        prompt: `${base} Generate a quiz containing at least 10 MCQs. Text:${transcript}`,
+        set: set_incoming_quiz,
+      },
+      {
+        enabled: asgn_check,
+        prompt: `${base} Generate an assignment that can be solved by someone who has watched the video. Text:${transcript}`,
+        set: set_incoming_asgn,
+      },
+      {
+        enabled: notes_check,
+        prompt: `${base} Generate lecture notes from the following content. Text:${transcript}`,
+        set: set_incoming_notes,
+      },
+      {
+        enabled: project_check,
+        prompt: `${base} Generate a project idea so the viewer can practically apply the knowledge from the video. Keep it brief — just the idea, not a full implementation guide. Text:${transcript}`,
+        set: set_incoming_proj,
+      },
+      {
+        enabled: paper_check,
+        prompt: `${base} Generate an exam paper with 12 short and 3 long questions. Text:${transcript}`,
+        set: set_incoming_paper,
+      },
+      {
+        enabled: summary_check,
+        prompt: `${base} Generate a concise summary. Text:${transcript}`,
+        set: set_incoming_summary,
+      },
+    ];
 
-        console.log("quiz", quiz)
+    const active = tasks.filter((t) => t.enabled);
+    const customNames = customPrompts.map((p) => p.trim()).filter((p) => p !== "");
 
-        if (quiz) {
-          set_incoming_quiz(quiz);
-          console.log("INCOMING", incoming_quiz);
-        }
+    const customPromptText = (name: string) =>
+      `A user requested a custom educational resource named "${name}". ` +
+      `First, decide whether "${name}" is a legitimate educational resource format that can be generated from a lecture transcript ` +
+      `(examples of VALID types: flashcards, glossary, study guide, mind map, key terms, cheat sheet, FAQ, concept map, vocabulary list). ` +
+      `Examples of INVALID inputs: a person's name, an unrelated topic, profanity, gibberish, or anything that is not a study/learning artifact. ` +
+      `If "${name}" is NOT a valid educational resource type, respond with EXACTLY this single line and nothing else: INVALID_RESOURCE\n` +
+      `Otherwise, generate the resource. ${base} Output only the resource itself, no preamble. Text:${transcript}`;
+
+    const [standardResults, customRaw] = await Promise.all([
+      Promise.all(active.map((t) => generateContent(t.prompt))),
+      Promise.all(customNames.map((name) => generateContent(customPromptText(name)))),
+    ]);
+
+    let anySucceeded = false;
+    standardResults.forEach((value, i) => {
+      if (typeof value === "string" && value) {
+        active[i].set(value);
+        anySucceeded = true;
       }
-      if (asgn_check === true) {
-        const asgn: string = await generateContent(
-          `Following given content is the text generated from an educational video. Generate an assignment that can be solved by someone who has watched the video and learnt from it. Be restricted to this given text, don’t use your own vector space. Text:${transcriptions}`
-        );
-        set_incoming_asgn(asgn);
+    });
+
+    const customOutputs: Array<{ name: string; content: string }> = [];
+    const rejected: string[] = [];
+    customRaw.forEach((value, i) => {
+      if (typeof value !== "string" || !value) return;
+      const isInvalid = value.trim().toUpperCase().startsWith("INVALID_RESOURCE");
+      if (isInvalid) {
+        rejected.push(customNames[i]);
+      } else {
+        customOutputs.push({ name: customNames[i], content: value });
+        anySucceeded = true;
       }
-      if (notes_check === true) {
-        const notes: string = await generateContent(
-          `Following given content is the text generated from an educational video. Generate lecture notes from the following content given. Be restricted to this given text, don’t use your own vector space. Text:${transcriptions}`
-        );
-        set_incoming_notes(notes);
-      }
-      if (project_check === true) {
-        const proj: string = await generateContent(
-          `Following given content is the text generated from an educational video. Generate a project idea such that the person who has watched the video(s) can implement their newly attained knowledge from the video to practically apply the knowledge. Don't try to explain everything, just give some basic idea for practical implementation of the knowledge. Be restricted to this given text, don’t use your own vector space. Text:${transcriptions}`
-        );
-        set_incoming_proj(proj);
-      }
-      if (paper_check === true) {
-        const paper: string = await generateContent(
-          `Following given content is the text generated from an educational video. Generate a paper with 12 short and 3 long questions from the following content given. Be restricted to this given text, don’t use your own vector space. Text:${transcriptions}`
-        );
-        set_incoming_paper(paper);
-      }
-      if (summary_check === true) {
-        const summary: string = await generateContent(
-          `Following given content is the text generated from an educational video. Generate a summary from the following content given. Be restricted to this given text, don’t use your own vector space. Text:${transcriptions}`
-        );
-        set_incoming_summary(summary);
-      }
+    });
+    setCustomResults(customOutputs);
+
+    if (rejected.length > 0) {
+      setError(
+        `Skipped non-educational custom resource${rejected.length === 1 ? "" : "s"}: ${rejected
+          .map((r) => `"${r}"`)
+          .join(", ")}.`
+      );
     }
+
+    if (!anySucceeded) {
+      if (rejected.length === 0) {
+        setError("The model did not return any content. Check the server logs.");
+      }
+      return;
+    }
+
+    setGenerated(true);
   };
 
-  async function generateContent(text: string) {
-    console.log(text);
-    
-    setError(null);
-
+  async function generateContent(text: string): Promise<string | null> {
     try {
       const res = await fetch("/api/chatgpt", {
         method: "POST",
-        body: JSON.stringify({
-          text: text,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
       });
 
-      const result = await res.json();
-      return result;
+      const result = await res.json().catch(() => null);
+      if (!res.ok) {
+        console.error("chatgpt route failed", res.status, result);
+        return null;
+      }
+      return typeof result === "string" ? result : null;
     } catch (error: any) {
       console.error(error);
       setError(error.message || "An unexpected error occurred");
-    }
-    finally{
-      setGenerated(true);
+      return null;
     }
   }
 
@@ -295,272 +392,360 @@ export default function Create() {
       console.error(error);
     }
   }
+  const resourceOptions: Array<{
+    id: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    checked: boolean;
+    toggle: () => void;
+  }> = [
+    { id: "quiz", label: "Quiz", icon: HelpCircle, checked: quiz_check, toggle: () => set_quiz_check((v) => !v) },
+    { id: "asgn", label: "Assignment", icon: ClipboardList, checked: asgn_check, toggle: () => set_asgn_check((v) => !v) },
+    { id: "notes", label: "Lecture Notes", icon: FileText, checked: notes_check, toggle: () => set_notes_check((v) => !v) },
+    { id: "proj", label: "Project Idea", icon: Lightbulb, checked: project_check, toggle: () => set_project_check((v) => !v) },
+    { id: "paper", label: "Exam Paper", icon: GraduationCap, checked: paper_check, toggle: () => set_paper_check((v) => !v) },
+    { id: "summary", label: "Summary", icon: AlignLeft, checked: summary_check, toggle: () => set_summary_check((v) => !v) },
+  ];
+
+  const generatedItems: Array<{ title: string; content: string; icon: React.ComponentType<{ className?: string }> }> = [
+    { title: "Quiz", content: incoming_quiz, icon: HelpCircle },
+    { title: "Assignment", content: incoming_asgn, icon: ClipboardList },
+    { title: "Lecture Notes", content: incoming_notes, icon: FileText },
+    { title: "Project Idea", content: incoming_proj, icon: Lightbulb },
+    { title: "Exam Paper", content: incoming_paper, icon: GraduationCap },
+    { title: "Summary", content: incoming_summary, icon: AlignLeft },
+    ...customResults.map((r) => ({
+      title: r.name,
+      content: r.content,
+      icon: Sticker as React.ComponentType<{ className?: string }>,
+    })),
+  ].filter((r) => r.content);
+
+  const stageLabel = uploading ? "Uploading..." : loading ? "Generating..." : "Generate";
+  const hasVideos = videoUrls.length > 0;
+  const filledCustomCount = customPrompts.filter((p) => p.trim() !== "").length;
+  const selectedCount =
+    resourceOptions.filter((r) => r.checked).length + filledCustomCount;
+  // Only the generation pipeline locks inputs. Uploads can run in the
+  // background while the user keeps configuring or adds more files.
+  const busy = loading;
+
   return (
-    <div>
+    <div className="min-h-screen">
       <Topbar />
-      <div>
-        <div className="grid grid-cols-2 gap-8 justify-between sm:flex-row mx-8">
-          <div className="mt-8 col-span-1 border rounded-md">
-            <div className="p-4 outline-1 m-2 shadow-xl rounded-lg w-full">
-              <h1 className="scroll-m-20 pb-2 text-2xl font-extrabold tracking-tight lg:text-3xl">
-                Upload
-              </h1>
-              <span className="font-extralight">Upload the video lectures for which you want the resources</span>
-              <ScrollArea className="h-[300px] w-full rounded-md p-4 mt-2">
-                <MultiFileDropzone
-                  className="w-full"
-                  value={fileStates}
-                  onChange={(files) => {
-                    setFileStates(files);
-                  }}
-                  onFilesAdded={async (addedFiles) => {
-                    setFileStates([...fileStates, ...addedFiles]);
-                    await Promise.all(
-                      addedFiles.map(async (addedFileState) => {
-                        try {
-                          const res = await edgestore.publicFiles.upload({
-                            file: addedFileState.file,
-                            onProgressChange: async (progress) => {
-                              setUploading(true);
-                              updateFileProgress(addedFileState.key, progress);
-                              if (progress === 100) {
-                                // wait 1 second to set it to complete
-                                // so that the user can see the progress bar at 100%
-                                await new Promise((resolve) =>
-                                  setTimeout(resolve, 1000)
-                                );
-                                setUploading(false);
-                                updateFileProgress(
-                                  addedFileState.key,
-                                  "COMPLETE"
-                                );
-                              }
-                            },
-                          });
-                          console.log("VIDURLS", videoUrls);
-                          setVideoUrls((prevUrls) => [...prevUrls, res.url]);
-                        } catch (err) {
-                          updateFileProgress(addedFileState.key, "ERROR");
-                        }
-                      })
-                    );
-                  }}
-                />
-              </ScrollArea>
+
+      <main className="mx-auto max-w-6xl px-4 py-8 space-y-8">
+        <header className="space-y-1">
+          <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl">
+            Create a new project
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Upload one or more lecture videos, choose what to generate, and review the results.
+          </p>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Step 1: Upload */}
+          <section className="rounded-xl border bg-card p-6 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+                1
+              </span>
+              <div>
+                <h2 className="text-lg font-semibold">Upload videos</h2>
+                <p className="text-xs text-muted-foreground">MKV or MP4 lecture files.</p>
+              </div>
             </div>
-          </div>
-          <div className="col-span-1 border rounded-md">
-            <div className="flex flex-col rounded-lg shadow-2xl p-4  gap-4 m-4">
-              <div className="mx-4 mt-2">
-                <h1 className="scroll-m-20 text-3xl font-extrabold tracking-tight lg:text-4xl">
-                  Generate Educational Resources
-                </h1>
-                <p className="leading-7 [&:not(:first-child)]:mt-6">
-                  Select the resources you want for the lectures uploaded
+
+            <ScrollArea className="h-[280px] w-full rounded-md">
+              <MultiFileDropzone
+                className="w-full"
+                disabled={busy}
+                value={fileStates}
+                onChange={(files) => setFileStates(files)}
+                onFilesAdded={async (addedFiles) => {
+                  setFileStates([...fileStates, ...addedFiles]);
+                  for (let i = 0; i < addedFiles.length; i++) {
+                    const addedFileState = addedFiles[i];
+                    const suggestedDefault = `Video ${videoUrls.length + i + 1}`;
+                    // Block on the naming dialog before kicking off the upload.
+                    const chosenName = await askForName(suggestedDefault);
+                    void (async () => {
+                      try {
+                        const res = await edgestore.publicFiles.upload({
+                          file: addedFileState.file,
+                          onProgressChange: async (progress) => {
+                            setUploading(true);
+                            updateFileProgress(addedFileState.key, progress);
+                            if (progress === 100) {
+                              await new Promise((resolve) => setTimeout(resolve, 1000));
+                              setUploading(false);
+                              updateFileProgress(addedFileState.key, "COMPLETE");
+                            }
+                          },
+                        });
+                        setVideoUrls((prev) => [...prev, res.url]);
+                        setVideoNames((prev) => [...prev, chosenName]);
+                      } catch (err) {
+                        updateFileProgress(addedFileState.key, "ERROR");
+                      }
+                    })();
+                  }
+                }}
+              />
+            </ScrollArea>
+          </section>
+
+          {/* Step 2: Configure */}
+          <section className="rounded-xl border bg-card p-6 shadow-sm flex flex-col">
+            <div className="mb-4 flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+                2
+              </span>
+              <div>
+                <h2 className="text-lg font-semibold">Choose resources</h2>
+                <p className="text-xs text-muted-foreground">
+                  Pick at least one. Multiple selections run in parallel.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-8 m-4">
-                <div className="flex flex-row gap-2">
-                  <Checkbox
-                    id="quiz"
-                    onCheckedChange={() => {
-                      set_quiz_check(!quiz_check);
-                    }}
-                    name="quiz"
-                  />
-                  <label
-                    htmlFor="quiz"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Quiz
-                  </label>
-                </div>
-                <div className="flex flex-row gap-2">
-                  <Checkbox
-                    id="assignment"
-                    onCheckedChange={() => {
-                      set_asgn_check(!asgn_check);
-                    }}
-                    name="asgn"
-                  />
-                  <label
-                    htmlFor="assignment"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Assignment
-                  </label>
-                </div>
-                <div className="flex flex-row gap-2">
-                  <Checkbox
-                    id="notes"
-                    onCheckedChange={() => {
-                      set_notes_check(!notes_check);
-                    }}
-                    name="notes"
-                  />
-                  <label
-                    htmlFor="notes"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Lecture Notes
-                  </label>
-                </div>
-                <div className="flex flex-row gap-2">
-                  <Checkbox
-                    id="project"
-                    onCheckedChange={() => {
-                      set_project_check(!project_check);
-                    }}
-                    name="project"
-                  />
-                  <label
-                    htmlFor="project"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Project
-                  </label>
-                </div>
-                <div className="flex flex-row gap-2">
-                  <Checkbox
-                    id="paper"
-                    onCheckedChange={() => {
-                      set_paper_check(!paper_check);
-                    }}
-                    name="paper"
-                  />
-                  <label
-                    htmlFor="paper"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Exam Paper
-                  </label>
-                </div>
-                <div className="flex flex-row gap-2">
-                  <Checkbox
-                    id="summary"
-                    onCheckedChange={() => {
-                      set_summary_check(!summary_check);
-                    }}
-                    name="summary"
-                  />
-                  <label
-                    htmlFor="summary"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Summary
-                  </label>
-                </div>
-              </div>
-              <div className="flex flex-row gap-2">
-                <Input
-                  type="text"
-                  id="prompt"
-                  autoFocus
-                  value={promptInput}
-                  onChange={handlePrompt}
-                  placeholder="Enter any other resource name you want to generate..."
-                />
-              </div>
-              {error && (
-                <Alert variant="destructive" className="mb-4 relative">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                  <button
-                    onClick={() => setError(null)}
-                    className="absolute top-2 right-2 text-sm hover:opacity-70"
-                  >
-                    ✕
-                  </button>
-                </Alert>
-              )}
-              <div>
-                <Button
-                  className="w-full"
-                  onClick={sendUrlsToApi} //check this
-                  disabled={loading || uploading}
-                >
-                  {loading ? "Processing..." : "Generate"}
-                </Button>
-              </div>
             </div>
-          </div>
-          {videoUrls && videoUrls.length > 0 && (
-            <div className="col-span-2 w-full">
-              <ScrollArea className="w-full whitespace-nowrap rounded-md border mb-8">
-                <div className="flex w-max space-x-4 p-4">
-                  {videoUrls.map((url, index) => (
-                    <div key={index} className="shrink-0">
-                      <div className="overflow-hidden rounded-md">
-                        <video width="320" height="240" controls preload="none">
+
+            <div className="grid grid-cols-2 gap-2">
+              {resourceOptions.map((opt) => {
+                const Icon = opt.icon;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={opt.toggle}
+                    disabled={busy}
+                    aria-pressed={opt.checked}
+                    className={
+                      "flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors text-left disabled:cursor-not-allowed disabled:opacity-50 " +
+                      (opt.checked
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-background hover:bg-accent hover:text-accent-foreground")
+                    }
+                  >
+                    <span
+                      className={
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors " +
+                        (opt.checked
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted-foreground/40 bg-background")
+                      }
+                      aria-hidden="true"
+                    >
+                      {opt.checked && <Check className="h-3 w-3" strokeWidth={3} />}
+                    </span>
+                    <Icon className={"h-4 w-4 " + (opt.checked ? "text-primary" : "text-muted-foreground")} />
+                    <span className="flex-1">{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                Custom resources (optional)
+              </Label>
+              {customPrompts.map((value, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    value={value}
+                    onChange={(e) => updateCustomPrompt(idx, e.target.value)}
+                    disabled={busy}
+                    placeholder="e.g. Flashcards, Glossary, Cheat sheet…"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeCustomPrompt(idx)}
+                    disabled={busy}
+                    aria-label="Remove this resource"
+                    className="shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addCustomPrompt}
+                disabled={busy}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                {customPrompts.length === 0 ? "Add custom resource" : "Add another"}
+              </Button>
+            </div>
+
+            {error && (
+              <Alert variant="destructive" className="mt-4 relative pr-8">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+                <button
+                  onClick={() => setError(null)}
+                  className="absolute top-2 right-2 text-sm hover:opacity-70"
+                  aria-label="Dismiss"
+                >
+                  ✕
+                </button>
+              </Alert>
+            )}
+
+            <div className="mt-auto pt-4 flex items-center justify-between gap-3">
+              <div className="text-xs text-muted-foreground">
+                {hasVideos ? (
+                  <>
+                    {videoUrls.length} video{videoUrls.length === 1 ? "" : "s"} ready ·{" "}
+                    {selectedCount} resource{selectedCount === 1 ? "" : "s"} selected
+                  </>
+                ) : (
+                  "Upload at least one video to enable generation."
+                )}
+              </div>
+              <Button
+                size="lg"
+                onClick={sendUrlsToApi}
+                disabled={busy || !hasVideos}
+                className="gap-2"
+              >
+                {loading || uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {stageLabel}
+              </Button>
+            </div>
+          </section>
+        </div>
+
+        {/* Uploaded video previews */}
+        {hasVideos && (
+          <section className="rounded-xl border bg-card p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Uploaded videos</h3>
+              <span className="text-xs text-muted-foreground">
+                {videoUrls.length} file{videoUrls.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="flex w-max gap-3 pb-2">
+                {videoUrls.map((url, index) => {
+                  const placeholder = `Video ${index + 1}`;
+                  const name = (videoNames[index] ?? "").trim() || placeholder;
+                  return (
+                    <div key={index} className="shrink-0 w-60">
+                      <div className="overflow-hidden rounded-md border bg-muted">
+                        <video width="240" height="135" controls preload="none" className="block">
                           <source src={url} type="video/mp4" />
                         </video>
                       </div>
-                      <figcaption className="pt-2 text-xs text-muted-foreground">
-                        <span className="font-semibold text-foreground">
-                          Video {index + 1 } &nbsp; 
-                        </span>
-                        by {username ?? "Unknown"} 
-                      </figcaption>
+                      <p className="pt-2 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">{name}</span>
+                        {" · "}
+                        {username ?? "you"}
+                      </p>
                     </div>
-                  ))}
+                  );
+                })}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </section>
+        )}
+
+        {/* Step 3: Results */}
+        {generated && generatedItems.length > 0 && (
+          <section className="rounded-xl border bg-card p-6 shadow-sm">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+                  3
+                </span>
+                <div>
+                  <h2 className="text-lg font-semibold">Generated resources</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Click any card to view, edit, copy, or download.
+                  </p>
                 </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
+              </div>
+              <Button onClick={saveProject} className="gap-2">
+                <Save className="h-4 w-4" />
+                Save project
+              </Button>
             </div>
-          )}
-        </div>
 
-        {generated && <div className="m-4 rounded-xl shadow-2xl drop-shadow-2xl">
-          <div className="mx-8 mt-8">
-            <h1 className="scroll-m-20 text-3xl font-extrabold tracking-tight lg:text-4xl">
-              Generated Resources
-            </h1>
-          </div>
-          <div className="flex flex-row gap-2 m-8 h-28">
-            {incoming_quiz && (
-              <div className="w-full">
-                <DrawerDialogDemo title="Quiz" content={incoming_quiz} />
-              </div>
-            )}
-            {incoming_asgn && (
-              <div className="w-full">
-                <DrawerDialogDemo title="Assignment" content={incoming_asgn} />
-              </div>
-            )}
-            {incoming_notes && (
-              <div className="grid w-full gap-1.5">
-                <DrawerDialogDemo
-                  title="Lecture Notes"
-                  content={incoming_notes}
-                />
-              </div>
-            )}
-            {incoming_proj && (
-              <div className="grid w-full gap-1.5">
-                <DrawerDialogDemo
-                  title="Project Idea"
-                  content={incoming_proj}
-                />
-              </div>
-            )}
-            {incoming_paper && (
-              <div className="w-full ">
-                <DrawerDialogDemo title="Exam Paper" content={incoming_paper} />
-              </div>
-            )}
-            {incoming_summary && (
-              <div className="grid w-full gap-1.5">
-                <DrawerDialogDemo title="Summary" content={incoming_summary} />
-              </div>
-            )}
-
-            <div>
-              <Button onClick={saveProject}>Save Project</Button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {generatedItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.title}
+                    className="rounded-lg border bg-background hover:bg-accent/40 transition-colors"
+                  >
+                    <DrawerDialogDemo title={item.title} content={item.content} />
+                    <div className="pointer-events-none px-3 pb-3 -mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Icon className="h-3.5 w-3.5" />
+                      Click to view
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-        </div>}
-      </div>
+          </section>
+        )}
+      </main>
+
+      <Dialog
+        open={nameDialog.open}
+        onOpenChange={(open) => {
+          // Closing the dialog without explicit Save/Skip = treat as Skip.
+          if (!open && nameDialog.resolver) {
+            finishNameDialog("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Name this video</DialogTitle>
+            <DialogDescription>
+              Give the lecture a recognizable name, or skip to use{" "}
+              <span className="font-medium text-foreground">{nameDialog.defaultName}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={nameDialog.value}
+            onChange={(e) =>
+              setNameDialog((prev) => ({ ...prev, value: e.target.value }))
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                finishNameDialog(nameDialog.value.trim());
+              }
+            }}
+            placeholder={nameDialog.defaultName}
+          />
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="ghost" onClick={() => finishNameDialog("")}>
+              Skip
+            </Button>
+            <Button onClick={() => finishNameDialog(nameDialog.value.trim())}>
+              Save name
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

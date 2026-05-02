@@ -1,32 +1,19 @@
 import { NextResponse } from "next/server";
 
-export const POST = async (req: Request, res : NextResponse) => {
+// AssemblyAI accepts video URLs directly (mp4/mkv/mov/webm) and extracts the
+// audio server-side, so we no longer need ApyHub's video→audio conversion.
+// ApyHub's only URL-based extractor is the synchronous endpoint, which truncates
+// long videos to a few seconds and has no async/job variant.
+// This route is now a passthrough to keep the call site in create/page.tsx
+// unchanged — it returns the EdgeStore video URL as-is so /api/audio-text can
+// hand it directly to AssemblyAI.
 
-    const { url } = await req.json();
+export const POST = async (req: Request) => {
+  const { url } = await req.json();
 
-    try {
-        const response = await fetch('https://api.apyhub.com/extract/video/audio/url', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apy-token': 'APY0irhMenVnhQRwduzPs2r0I2Zvea7XIn049N3dy6vQk0Iks2gRG4sxeSDwvb3w6TTtExXgyQb',
+  if (!url) {
+    return NextResponse.json({ error: "video url not provided" }, { status: 400 });
+  }
 
-            },
-            body: JSON.stringify({
-                "video_url": url,
-            })
-        });
-
-        const responsedata = await response.json();
-        console.log(responsedata.data)
-        
-        return NextResponse.json(responsedata.data);
-
-        
-    } catch (error: any) {
-        return NextResponse.json(error.message, { status: 500 });
-    }
-    
-    
-
-}
+  return NextResponse.json(url);
+};
