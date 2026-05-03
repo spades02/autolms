@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { AssemblyAI } from "assemblyai";
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const POLLING_INTERVAL_MS = 3000;
 const POLLING_TIMEOUT_MS = 600_000; // 10 min, plenty for long lectures
