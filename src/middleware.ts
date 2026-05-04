@@ -9,11 +9,8 @@ export default authMiddleware({
     // "/" will be accessible to all users
     publicRoutes: [
       "/",
-      '/api/webhook/clerk',
-      '/api/webhook/stripe',
-      "/community",
-      "/api/convert",
-      "/api/audio-text",
+      "/api/webhook/clerk",
+      "/api/dev/promote",
     ],
     ignoredRoutes: [
     ],

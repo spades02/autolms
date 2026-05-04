@@ -1,7 +1,7 @@
 import Image from "next/image";
+import Link from "next/link";
 import React from "react";
 import logo from "../../public/autolms-nav.png";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ModeToggle } from "./ui/ModeToggle";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import { Button } from "./ui/button";
@@ -16,20 +16,19 @@ export default function Navbar() {
             AutoLMS
           </h1>
         </div>
-        <div className="flex gap-2 mr-4">
+        <div className="flex gap-2 mr-4 items-center">
           <ModeToggle />
+          <SignedIn>
+            <Link href="/dashboard">
+              <Button variant="outline">Dashboard</Button>
+            </Link>
+            <UserButton afterSignOutUrl="/" />
+          </SignedIn>
           <SignedOut>
             <Button className="bg-blue-600 text-white hover:bg-blue-500">
               <SignInButton />
             </Button>
           </SignedOut>
-          <SignedIn>
-              <UserButton afterSignOutUrl="/"/>
-          </SignedIn>
-          {/* <Avatar className="ml-4">
-            <AvatarImage src="https://github.com/shadcn.png" />
-            <AvatarFallback>CN</AvatarFallback>
-          </Avatar> */}
         </div>
       </div>
     </div>

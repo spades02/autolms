@@ -21,20 +21,33 @@ const es = initEdgeStore.context<Context>().create();
  */
 const edgeStoreRouter = es.router({
   publicFiles: es
-  .fileBucket({
-    // maxSize: 1024 * 1024 * 10, // 10MB
-    accept: ['video/mkv', 'video/mp4'], // wildcard also works: ['image/*']
-    
-  })
-  .path(({ ctx }) => [{owner:ctx.userId}])
-
-  .beforeUpload(({ ctx, input, fileInfo }) => {
-      console.log('beforeUploadctx', ctx,'input', input,'file info', fileInfo);
-      return true; // allow upload
+    .fileBucket({
+      accept: ["video/mkv", "video/mp4"],
     })
-   .beforeDelete(({ ctx, fileInfo }) => {
-      console.log('beforeDelete', ctx, fileInfo);
-      return true; // allow delete
+    .path(({ ctx }) => [{ owner: ctx.userId }])
+    .beforeUpload(({ ctx, input, fileInfo }) => {
+      console.log("beforeUploadctx", ctx, "input", input, "file info", fileInfo);
+      return true;
+    })
+    .beforeDelete(({ ctx, fileInfo }) => {
+      console.log("beforeDelete", ctx, fileInfo);
+      return true;
+    }),
+  submissionFiles: es
+    .fileBucket({
+      accept: [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ],
+    })
+    .path(({ ctx }) => [{ owner: ctx.userId }])
+    .beforeUpload(({ ctx, input, fileInfo }) => {
+      console.log("submission upload", ctx, input, fileInfo);
+      return true;
+    })
+    .beforeDelete(({ ctx, fileInfo }) => {
+      console.log("submission delete", ctx, fileInfo);
+      return true;
     }),
 });
  
