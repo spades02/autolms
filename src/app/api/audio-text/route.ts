@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { transcribeAudio, TranscribeError } from "@/lib/transcribe";
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export const POST = async (req: Request) => {
   const { url } = await req.json();

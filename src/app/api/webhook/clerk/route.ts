@@ -68,10 +68,17 @@ export async function POST(req: Request) {
     // applied before the user signed up).
     const role = coerceRole((public_metadata as any)?.role);
 
+    const idSuffix = id.replace(/[^a-z0-9]/gi, "").slice(-6).toLowerCase();
+    const baseUsername =
+      username ?? email_addresses[0].email_address.split("@")[0] ?? "user";
+    const finalUsername = username
+      ? username
+      : `${baseUsername}-${idSuffix}`;
+
     const user = {
       clerkId: id,
       name: `${first_name ?? ""}${last_name ? ` ${last_name}` : ""}`.trim(),
-      username: username ?? email_addresses[0].email_address.split("@")[0],
+      username: finalUsername,
       email: email_addresses[0].email_address,
       picture: image_url,
       role,

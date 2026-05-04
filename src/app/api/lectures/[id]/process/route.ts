@@ -6,7 +6,7 @@ import { generateLectureSummary } from "@/lib/generate";
 import { requireRole } from "@/actions/user.action";
 import { assertFacultyOwnsCourse } from "@/actions/course.action";
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function POST(
   _req: Request,

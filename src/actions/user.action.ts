@@ -7,9 +7,11 @@ import {
   DeleteUserParams,
   UpdateUserParams,
 } from "@/types/shared.types";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+
+const ALLOWED_ROLES: UserRole[] = ["student", "faculty", "admin"];
 
 export default async function getClerkUserId() {
   const { userId } = auth();
@@ -36,12 +38,58 @@ export async function getUserById(userId: string) {
 
 /**
  * Returns the current Mongo user (with role) for the signed-in Clerk session.
- * Redirects to /sign-in if unauthenticated. Returns null if Clerk session
- * exists but the Mongo mirror has not landed yet (rare race after signup).
+ * Redirects to /sign-in if unauthenticated. If the Clerk webhook hasn't landed
+ * yet (or can't reach localhost in dev), lazily creates the Mongo mirror from
+ * the live Clerk profile so the rest of the app has someone to work with.
  */
 export async function getCurrentMongoUser() {
   const clerkId = await getClerkUserId();
-  return getUserById(clerkId);
+  const existing = await getUserById(clerkId);
+  if (existing) return existing;
+
+  // Webhook hasn't synced yet — pull from Clerk and mirror now.
+  try {
+    const clerkUser = await clerkClient.users.getUser(clerkId);
+    const email =
+      clerkUser.emailAddresses[0]?.emailAddress ?? `${clerkId}@clerk.local`;
+    const metaRole = (clerkUser.publicMetadata as any)?.role;
+    const role: UserRole = ALLOWED_ROLES.includes(metaRole)
+      ? metaRole
+      : "student";
+
+    // Suffix the derived username with a slice of clerkId so it stays unique
+    // across users even when their email local-parts collide (e.g. multiple
+    // accounts with addresses like student@…).
+    const idSuffix = clerkId.replace(/[^a-z0-9]/gi, "").slice(-6).toLowerCase();
+    const baseUsername =
+      clerkUser.username ?? email.split("@")[0] ?? "user";
+    const username = clerkUser.username
+      ? clerkUser.username
+      : `${baseUsername}-${idSuffix}`;
+
+    const created = await createUser({
+      clerkId,
+      name: `${clerkUser.firstName ?? ""}${clerkUser.lastName ? ` ${clerkUser.lastName}` : ""}`.trim(),
+      username,
+      email,
+      picture: clerkUser.imageUrl,
+      role,
+    });
+    if (created) {
+      // Best-effort metadata sync so client gates see the role too.
+      try {
+        await clerkClient.users.updateUserMetadata(clerkId, {
+          publicMetadata: { userId: created._id, role },
+        });
+      } catch (err) {
+        console.log("clerk metadata sync failed", err);
+      }
+    }
+    return created ?? null;
+  } catch (err) {
+    console.log("lazy mongo user create failed", err);
+    return null;
+  }
 }
 
 /**
@@ -63,12 +111,31 @@ export async function createUser(userData: CreateUserParams) {
   try {
     await connectToDatabase();
 
-    const newUser = await User.create({
+    const baseDoc = {
       ...userData,
       role: userData.role ?? "student",
-    });
+    };
 
-    return JSON.parse(JSON.stringify(newUser));
+    try {
+      const newUser = await User.create(baseDoc);
+      return JSON.parse(JSON.stringify(newUser));
+    } catch (err: any) {
+      // Username collision — append a clerkId-derived suffix and retry once
+      // so a different Clerk account can't be permanently locked out by an
+      // existing Mongo doc holding the same handle.
+      const isUsernameDupe =
+        err?.code === 11000 && err?.keyPattern?.username === 1;
+      if (isUsernameDupe) {
+        const idSuffix = userData.clerkId
+          .replace(/[^a-z0-9]/gi, "")
+          .slice(-6)
+          .toLowerCase();
+        const fallback = `${userData.username ?? "user"}-${idSuffix}`;
+        const retried = await User.create({ ...baseDoc, username: fallback });
+        return JSON.parse(JSON.stringify(retried));
+      }
+      throw err;
+    }
   } catch (error) {
     console.log(error);
   }
