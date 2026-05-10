@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/actions/user.action";
 import { getCourseById } from "@/actions/course.action";
 import { getLecturesForCourse } from "@/actions/lecture.action";
+import { getPendingRequestCount } from "@/actions/enrollmentRequest.action";
 import JoinCodeDisplay from "@/components/portal/JoinCodeDisplay";
 import LectureStatusBadge from "@/components/portal/LectureStatusBadge";
 import CourseTabs from "@/components/portal/CourseTabs";
@@ -19,7 +20,10 @@ export default async function FacultyCoursePage({
   const detail = await getCourseById(params.id);
   if (!detail || detail.role !== "faculty") notFound();
 
-  const lectures = await getLecturesForCourse(params.id);
+  const [lectures, pendingCount] = await Promise.all([
+    getLecturesForCourse(params.id),
+    getPendingRequestCount(params.id),
+  ]);
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -45,7 +49,11 @@ export default async function FacultyCoursePage({
         </div>
       </header>
 
-      <CourseTabs courseId={params.id} audience="faculty" />
+      <CourseTabs
+        courseId={params.id}
+        audience="faculty"
+        badges={{ pending: pendingCount }}
+      />
 
       <section>
         <div className="flex items-center justify-between mb-3">

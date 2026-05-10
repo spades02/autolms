@@ -4,6 +4,7 @@ import { requireRole } from "@/actions/user.action";
 import { getCourseById } from "@/actions/course.action";
 import { getLecturesForCourse } from "@/actions/lecture.action";
 import { getQuizzesForCourse } from "@/actions/quiz.action";
+import { getPendingRequestCount } from "@/actions/enrollmentRequest.action";
 import CourseTabs from "@/components/portal/CourseTabs";
 import CreateQuizDialog from "@/components/portal/CreateQuizDialog";
 import QuizStatusBadge from "@/components/portal/QuizStatusBadge";
@@ -19,9 +20,10 @@ export default async function FacultyQuizzesPage({
   const detail = await getCourseById(params.id);
   if (!detail || detail.role !== "faculty") notFound();
 
-  const [quizzes, lectures] = await Promise.all([
+  const [quizzes, lectures, pendingCount] = await Promise.all([
     getQuizzesForCourse(params.id),
     getLecturesForCourse(params.id),
+    getPendingRequestCount(params.id),
   ]);
 
   return (
@@ -36,7 +38,11 @@ export default async function FacultyQuizzesPage({
         <h1 className="text-2xl font-semibold mt-1">{detail.course.title}</h1>
       </header>
 
-      <CourseTabs courseId={params.id} audience="faculty" />
+      <CourseTabs
+        courseId={params.id}
+        audience="faculty"
+        badges={{ pending: pendingCount }}
+      />
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">

@@ -24,6 +24,7 @@ type Existing = {
   grade: number | null;
   feedback: string;
   submittedAt: string;
+  gradeApproved?: boolean;
 } | null;
 
 type Phase = "idle" | "uploading" | "saving" | "error";
@@ -62,7 +63,7 @@ export default function AssignmentSubmitForm({
 
     const file = files[0];
     if (!file) {
-      setError("Pick a PDF or DOCX file to submit.");
+      setError("Pick a file to submit (PDF, DOC, DOCX, PPT, PPTX, XLSX, or ZIP).");
       return;
     }
 
@@ -106,6 +107,7 @@ export default function AssignmentSubmitForm({
         grade: saved.grade,
         feedback: saved.feedback,
         submittedAt: saved.submittedAt,
+        gradeApproved: saved.gradeApproved,
       });
       setFiles([]);
       setNote("");
@@ -145,12 +147,12 @@ export default function AssignmentSubmitForm({
               {new Date(submission.submittedAt).toLocaleString()}
             </span>
           </div>
-          {submission.status === "Reviewed" ? (
+          {submission.status === "Reviewed" && submission.gradeApproved ? (
             <div className="text-sm space-y-1 pt-2 border-t">
               {submission.grade !== null ? (
                 <div>
                   <span className="text-muted-foreground">Grade:</span>{" "}
-                  <span className="font-medium">{submission.grade}</span>
+                  <span className="font-medium">{submission.grade} / 10</span>
                 </div>
               ) : null}
               {submission.feedback ? (
@@ -179,13 +181,24 @@ export default function AssignmentSubmitForm({
                 maxFiles: 1,
                 accept: {
                   "application/pdf": [".pdf"],
+                  "application/msword": [".doc"],
                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                     [".docx"],
+                  "application/vnd.ms-powerpoint": [".ppt"],
+                  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+                    [".pptx"],
+                  "application/vnd.ms-excel": [".xls"],
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+                    [".xlsx"],
+                  "application/zip": [".zip"],
+                  "application/x-zip-compressed": [".zip"],
                 },
               }}
               disabled={busy}
             />
-            <p className="text-xs text-muted-foreground">PDF or DOCX.</p>
+            <p className="text-xs text-muted-foreground">
+              PDF, DOC, DOCX, PPT, PPTX, XLSX, or ZIP.
+            </p>
           </div>
 
           <div className="grid gap-1">

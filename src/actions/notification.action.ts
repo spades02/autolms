@@ -8,13 +8,23 @@ import { connectToDatabase } from "@/lib/mongoose";
 import { getCurrentMongoUser } from "@/actions/user.action";
 import { revalidatePath } from "next/cache";
 
+export type NotificationKind =
+  | "lecture_published"
+  | "quiz_published"
+  | "assignment_published"
+  | "assignment_due_soon"
+  | "enrollment_request_created"
+  | "enrollment_request_decided"
+  | "forum_thread_created"
+  | "forum_reply_posted"
+  | "submission_received"
+  | "submission_reviewed"
+  | "lecture_processing_done"
+  | "lecture_processing_failed";
+
 export type CreateNotificationInput = {
   recipient: string;
-  kind:
-    | "lecture_published"
-    | "quiz_published"
-    | "assignment_published"
-    | "assignment_due_soon";
+  kind: NotificationKind;
   title: string;
   body?: string;
   link?: string;
@@ -50,7 +60,7 @@ export async function createNotification(input: CreateNotificationInput) {
  */
 export async function fanOutCourseNotification(params: {
   courseId: string;
-  kind: CreateNotificationInput["kind"];
+  kind: NotificationKind;
   title: string;
   body?: string;
   link?: string;

@@ -15,6 +15,9 @@ import {
   updateAssignment,
 } from "@/actions/assignment.action";
 import AssignmentStatusBadge from "@/components/portal/AssignmentStatusBadge";
+import AssignmentAttachmentsField, {
+  type Attachment,
+} from "@/components/portal/AssignmentAttachmentsField";
 import type { AssignmentStatus } from "@/database/assignment.model";
 
 function dateToLocalInput(d: Date | string) {
@@ -28,9 +31,11 @@ type Editable = {
   course: string;
   title: string;
   instructions: string;
+  rubric: string;
   dueDate: string;
   status: AssignmentStatus;
   allowLate: boolean;
+  attachments: Attachment[];
 };
 
 export default function AssignmentEditor({
@@ -44,21 +49,31 @@ export default function AssignmentEditor({
 
   const [title, setTitle] = useState(initial.title);
   const [instructions, setInstructions] = useState(initial.instructions);
+  const [rubric, setRubric] = useState(initial.rubric ?? "");
   const [dueLocal, setDueLocal] = useState(
     dateToLocalInput(initial.dueDate),
   );
   const [allowLate, setAllowLate] = useState(initial.allowLate);
+  const [attachments, setAttachments] = useState<Attachment[]>(
+    initial.attachments ?? [],
+  );
   const [status, setStatus] = useState<AssignmentStatus>(initial.status);
+
+  function buildPatch() {
+    return {
+      title,
+      instructions,
+      rubric,
+      dueDate: new Date(dueLocal),
+      allowLate,
+      attachments,
+    };
+  }
 
   function save() {
     startTransition(async () => {
       try {
-        const updated = await updateAssignment(initial._id, {
-          title,
-          instructions,
-          dueDate: new Date(dueLocal),
-          allowLate,
-        });
+        const updated = await updateAssignment(initial._id, buildPatch());
         setStatus(updated.status);
         toast({ title: "Saved" });
       } catch (err: any) {
@@ -73,12 +88,7 @@ export default function AssignmentEditor({
   function publish() {
     startTransition(async () => {
       try {
-        await updateAssignment(initial._id, {
-          title,
-          instructions,
-          dueDate: new Date(dueLocal),
-          allowLate,
-        });
+        await updateAssignment(initial._id, buildPatch());
         const updated = await publishAssignment(initial._id);
         setStatus(updated.status);
         toast({ title: "Assignment published" });
@@ -113,9 +123,7 @@ export default function AssignmentEditor({
       try {
         await deleteAssignment(initial._id);
         toast({ title: "Deleted" });
-        router.replace(
-          `/faculty/courses/${initial.course}/assignments`,
-        );
+        router.replace(`/faculty/courses/${initial.course}/assignments`);
       } catch (err: any) {
         toast({
           title: "Could not delete",
@@ -171,7 +179,31 @@ export default function AssignmentEditor({
           id="a-instructions"
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
-          rows={8}
+          rows={6}
+          disabled={pending}
+        />
+      </div>
+
+      <div className="grid gap-1 max-w-2xl">
+        <Label htmlFor="a-rubric">
+          Grading rubric (used by AI auto-grader; leave blank to skip)
+        </Label>
+        <Textarea
+          id="a-rubric"
+          value={rubric}
+          onChange={(e) => setRubric(e.target.value)}
+          rows={6}
+          placeholder={
+            "Example:\n- Correctness (4 pts)\n- Code quality (3 pts)\n- Documentation (2 pts)\n- Bonus / extra effort (1 pt)\nTotal: 10"
+          }
+          disabled={pending}
+        />
+      </div>
+
+      <div className="max-w-2xl">
+        <AssignmentAttachmentsField
+          attachments={attachments}
+          onChange={setAttachments}
           disabled={pending}
         />
       </div>

@@ -5,6 +5,7 @@ import { transcribeAudio } from "@/lib/transcribe";
 import { generateLectureSummary } from "@/lib/generate";
 import { requireRole } from "@/actions/user.action";
 import { assertFacultyOwnsCourse } from "@/actions/course.action";
+import { createNotification } from "@/actions/notification.action";
 
 export const maxDuration = 60;
 
@@ -59,6 +60,19 @@ export async function POST(
     lecture.status = "ReviewReady";
     await lecture.save();
 
+    try {
+      await createNotification({
+        recipient: String(lecture.uploadedBy),
+        kind: "lecture_processing_done",
+        title: `Ready for review: ${lecture.title}`,
+        body: "Transcript and summary generated. Edit and publish when ready.",
+        link: `/faculty/lectures/${lecture._id}`,
+        refId: String(lecture._id),
+      });
+    } catch (notifyErr) {
+      console.log("processing_done notify failed", notifyErr);
+    }
+
     return NextResponse.json({
       status: lecture.status,
       transcriptLength: transcript.length,
@@ -70,6 +84,19 @@ export async function POST(
     lecture.status = "Failed";
     lecture.processingError = message;
     await lecture.save();
+
+    try {
+      await createNotification({
+        recipient: String(lecture.uploadedBy),
+        kind: "lecture_processing_failed",
+        title: `Processing failed: ${lecture.title}`,
+        body: message,
+        link: `/faculty/lectures/${lecture._id}`,
+        refId: String(lecture._id),
+      });
+    } catch (notifyErr) {
+      console.log("processing_failed notify failed", notifyErr);
+    }
 
     return NextResponse.json(
       { status: "Failed", error: message },

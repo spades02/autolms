@@ -19,6 +19,7 @@ export interface IAssignment extends Document {
   publishedAt?: Date;
   allowLate: boolean;
   attachments: IAssignmentAttachment[];
+  rubric: string;
   createdAt: Date;
 }
 
@@ -51,6 +52,7 @@ const AssignmentSchema = new Schema({
   publishedAt: { type: Date },
   allowLate: { type: Boolean, default: true },
   attachments: { type: [AttachmentSchema], default: [] },
+  rubric: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },
 });
 

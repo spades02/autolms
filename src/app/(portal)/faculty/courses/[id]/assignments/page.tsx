@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/actions/user.action";
 import { getCourseById } from "@/actions/course.action";
 import { getAssignmentsForCourse } from "@/actions/assignment.action";
+import { getPendingRequestCount } from "@/actions/enrollmentRequest.action";
 import CourseTabs from "@/components/portal/CourseTabs";
 import CreateAssignmentDialog from "@/components/portal/CreateAssignmentDialog";
 import AssignmentStatusBadge from "@/components/portal/AssignmentStatusBadge";
@@ -18,7 +19,10 @@ export default async function FacultyAssignmentsPage({
   const detail = await getCourseById(params.id);
   if (!detail || detail.role !== "faculty") notFound();
 
-  const assignments = await getAssignmentsForCourse(params.id);
+  const [assignments, pendingCount] = await Promise.all([
+    getAssignmentsForCourse(params.id),
+    getPendingRequestCount(params.id),
+  ]);
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -32,7 +36,11 @@ export default async function FacultyAssignmentsPage({
         <h1 className="text-2xl font-semibold mt-1">{detail.course.title}</h1>
       </header>
 
-      <CourseTabs courseId={params.id} audience="faculty" />
+      <CourseTabs
+        courseId={params.id}
+        audience="faculty"
+        badges={{ pending: pendingCount }}
+      />
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">

@@ -4,7 +4,15 @@ export type NotificationKind =
   | "lecture_published"
   | "quiz_published"
   | "assignment_published"
-  | "assignment_due_soon";
+  | "assignment_due_soon"
+  | "enrollment_request_created"
+  | "enrollment_request_decided"
+  | "forum_thread_created"
+  | "forum_reply_posted"
+  | "submission_received"
+  | "submission_reviewed"
+  | "lecture_processing_done"
+  | "lecture_processing_failed";
 
 export interface INotification extends Document {
   _id: Types.ObjectId;
@@ -32,6 +40,14 @@ const NotificationSchema = new Schema({
       "quiz_published",
       "assignment_published",
       "assignment_due_soon",
+      "enrollment_request_created",
+      "enrollment_request_decided",
+      "forum_thread_created",
+      "forum_reply_posted",
+      "submission_received",
+      "submission_reviewed",
+      "lecture_processing_done",
+      "lecture_processing_failed",
     ],
     required: true,
   },

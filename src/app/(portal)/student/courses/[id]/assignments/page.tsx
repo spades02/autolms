@@ -64,8 +64,9 @@ export default async function StudentAssignmentsPage({
                       Due {due.toLocaleString()}
                       {overdue ? " · overdue" : ""}
                       {a.mySubmission?.grade !== null &&
-                      a.mySubmission?.grade !== undefined
-                        ? ` · grade ${a.mySubmission.grade}`
+                      a.mySubmission?.grade !== undefined &&
+                      a.mySubmission?.gradeApproved
+                        ? ` · grade ${a.mySubmission.grade} / 10`
                         : ""}
                     </div>
                   </Link>

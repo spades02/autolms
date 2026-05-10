@@ -1,4 +1,4 @@
-import { generateObject, generateText } from "ai";
+import { embed, generateObject, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 
@@ -151,5 +151,72 @@ export async function generateQuizQuestions(
       "Do not reference 'the text', 'the lecture', or the speaker. " +
       "Content:\n\n" +
       transcript,
+  });
+}
+
+/**
+ * Returns a semantic embedding for the given text via Gemini's
+ * `text-embedding-004` model. Used by the plagiarism intra-assignment scan.
+ */
+export async function generateEmbedding(text: string): Promise<number[]> {
+  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    throw new GenerateError("GOOGLE_GENERATIVE_AI_API_KEY not configured", 500);
+  }
+  const trimmed = text?.slice(0, 8000) ?? "";
+  if (!trimmed.trim()) {
+    throw new GenerateError("nothing to embed", 400);
+  }
+  try {
+    const { embedding } = await embed({
+      model: google.textEmbeddingModel("text-embedding-004"),
+      value: trimmed,
+    });
+    return embedding;
+  } catch (error: any) {
+    console.log("ai-sdk embedding error", error?.message);
+    throw new GenerateError(error?.message ?? "embedding failed", 500);
+  }
+}
+
+const RUBRIC_GRADE_SCHEMA = z.object({
+  score: z.number().min(0).max(10),
+  feedback: z.string().min(1),
+});
+
+export type RubricGradeResult = z.infer<typeof RUBRIC_GRADE_SCHEMA>;
+
+const RUBRIC_GRADE_SYSTEM =
+  "You are an academic grader. Grade the student submission strictly against the rubric. " +
+  "Output JSON ONLY matching the schema. The score must be a number from 0 to 10 inclusive (decimals allowed). " +
+  "Feedback must be 2-5 short sentences explaining the score, citing the rubric criteria. " +
+  "Do not be lenient if rubric criteria are unmet, and do not penalize for things not in the rubric. " +
+  "If the submission is empty, garbled, or unrelated to the assignment, score 0 and explain.";
+
+/**
+ * Asks Gemini to grade a submission against a faculty-provided rubric and
+ * returns a 0–10 score plus written feedback. Caller persists the result and
+ * decides whether to expose it to the student.
+ */
+export async function gradeSubmissionWithRubric(opts: {
+  instructions: string;
+  rubric: string;
+  submissionText: string;
+}): Promise<RubricGradeResult> {
+  const { instructions, rubric, submissionText } = opts;
+  if (!rubric?.trim()) {
+    throw new GenerateError("rubric is required for AI grading", 400);
+  }
+  if (!submissionText?.trim()) {
+    throw new GenerateError("submission has no extracted text", 400);
+  }
+
+  return generateStructured({
+    schema: RUBRIC_GRADE_SCHEMA,
+    system: RUBRIC_GRADE_SYSTEM,
+    prompt:
+      `Assignment instructions:\n${instructions || "(none provided)"}\n\n` +
+      `Rubric:\n${rubric}\n\n` +
+      `Student submission:\n${submissionText}\n\n` +
+      "Grade the submission against the rubric.",
   });
 }

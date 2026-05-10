@@ -11,8 +11,19 @@ import {
   requireRole,
 } from "@/actions/user.action";
 import { assertFacultyOwnsCourse } from "@/actions/course.action";
-import { fanOutCourseNotification } from "@/actions/notification.action";
+import {
+  createNotification,
+  fanOutCourseNotification,
+} from "@/actions/notification.action";
+import {
+  generateEmbedding,
+  gradeSubmissionWithRubric,
+} from "@/lib/generate";
+import { extractTextFromUpload } from "@/lib/extractText";
+import { cosineSimilarity } from "@/lib/similarity";
 import { revalidatePath } from "next/cache";
+
+const PLAGIARISM_THRESHOLD = 0.85;
 
 async function loadAssignmentForFaculty(id: string) {
   await connectToDatabase();
@@ -26,6 +37,7 @@ export async function createAssignment(params: {
   courseId: string;
   title: string;
   instructions?: string;
+  rubric?: string;
   dueDate: string | Date;
   allowLate?: boolean;
   attachments?: { url: string; name: string; size?: number }[];
@@ -42,6 +54,7 @@ export async function createAssignment(params: {
     author: user._id,
     title: params.title.trim(),
     instructions: params.instructions ?? "",
+    rubric: params.rubric ?? "",
     dueDate: due,
     allowLate: params.allowLate ?? true,
     attachments: params.attachments ?? [],
@@ -57,6 +70,7 @@ export async function updateAssignment(
   patch: {
     title?: string;
     instructions?: string;
+    rubric?: string;
     dueDate?: string | Date;
     allowLate?: boolean;
     attachments?: { url: string; name: string; size?: number }[];
@@ -67,6 +81,7 @@ export async function updateAssignment(
   if (typeof patch.title === "string") assignment.title = patch.title;
   if (typeof patch.instructions === "string")
     assignment.instructions = patch.instructions;
+  if (typeof patch.rubric === "string") assignment.rubric = patch.rubric;
   if (typeof patch.allowLate === "boolean")
     assignment.allowLate = patch.allowLate;
   if (Array.isArray(patch.attachments))
@@ -238,6 +253,59 @@ export async function getAssignmentById(id: string) {
   return out;
 }
 
+/**
+ * Internal — runs text extraction + AI grading + embedding for a saved
+ * submission. Failures don't propagate; the submission stays usable.
+ */
+export async function runAutoGrade(submissionId: string) {
+  await connectToDatabase();
+  const sub = await Submission.findById(submissionId);
+  if (!sub) return;
+
+  // Extract text once and store it for later (also feeds embedding).
+  let text = "";
+  try {
+    text = await extractTextFromUpload({
+      url: sub.fileUrl,
+      fileName: sub.fileName,
+    });
+    sub.extractedText = text;
+    sub.extractionFailed = false;
+  } catch (err: any) {
+    sub.extractionFailed = true;
+    await sub.save();
+    console.log("extraction failed", submissionId, err?.message);
+    return;
+  }
+
+  // Embedding for plagiarism scan (cheap, doesn't depend on rubric).
+  try {
+    const emb = await generateEmbedding(text);
+    sub.embedding = emb;
+  } catch (err: any) {
+    console.log("embedding failed", submissionId, err?.message);
+  }
+
+  // AI grade only if the assignment has a rubric set.
+  const assignment = await Assignment.findById(sub.assignment);
+  if (assignment?.rubric?.trim()) {
+    try {
+      const result = await gradeSubmissionWithRubric({
+        instructions: assignment.instructions ?? "",
+        rubric: assignment.rubric,
+        submissionText: text,
+      });
+      sub.aiGrade = Math.max(0, Math.min(10, result.score));
+      sub.aiFeedback = result.feedback;
+      sub.aiGradedAt = new Date();
+    } catch (err: any) {
+      console.log("ai grade failed", submissionId, err?.message);
+    }
+  }
+
+  await sub.save();
+}
+
 export async function submitAssignment(params: {
   assignmentId: string;
   fileUrl: string;
@@ -280,6 +348,13 @@ export async function submitAssignment(params: {
         status: "Submitted",
         feedback: "",
         grade: null,
+        gradeApproved: false,
+        aiGrade: null,
+        aiFeedback: "",
+        aiGradedAt: undefined,
+        embedding: [],
+        extractedText: "",
+        extractionFailed: false,
         reviewedAt: undefined,
         reviewedBy: undefined,
       },
@@ -287,10 +362,40 @@ export async function submitAssignment(params: {
     { new: true, upsert: true, setDefaultsOnInsert: true },
   );
 
+  // Synchronous AI pipeline. Failures are logged but never bubble up.
+  try {
+    await runAutoGrade(String(submission._id));
+  } catch (err) {
+    console.log("auto-grade pipeline error", err);
+  }
+
+  // Notify the course faculty that a submission landed.
+  try {
+    const course = await Course.findById(assignment.course).lean<{
+      _id: any;
+      faculty: any;
+    }>();
+    if (course) {
+      await createNotification({
+        recipient: String(course.faculty),
+        kind: "submission_received",
+        title: `Submission: ${assignment.title}`,
+        body: `${user.name || user.username || user.email} submitted${isLate ? " (late)" : ""}.`,
+        link: `/faculty/assignments/${assignment._id}`,
+        refId: String(submission._id),
+      });
+    }
+  } catch (err) {
+    console.log("submission_received notify failed", err);
+  }
+
   revalidatePath(`/student/courses/${assignment.course}/assignments`);
   revalidatePath(`/student/assignments/${params.assignmentId}`);
   revalidatePath(`/faculty/assignments/${params.assignmentId}`);
-  return JSON.parse(JSON.stringify(submission));
+
+  // Re-load so the caller sees the AI grade if it landed.
+  const fresh = await Submission.findById(submission._id).lean();
+  return JSON.parse(JSON.stringify(fresh));
 }
 
 export async function getSubmissionsForAssignment(assignmentId: string) {
@@ -303,8 +408,38 @@ export async function getSubmissionsForAssignment(assignmentId: string) {
       model: User,
       select: "_id name username picture email",
     })
-    .lean();
-  return JSON.parse(JSON.stringify(submissions));
+    .lean<any[]>();
+
+  // Compute pairwise plagiarism similarities once and decorate each row.
+  const decorated = submissions.map((s) => ({ ...s, mostSimilar: null as any }));
+  const withEmb = decorated.filter(
+    (s) => Array.isArray(s.embedding) && s.embedding.length > 0,
+  );
+  for (let i = 0; i < withEmb.length; i++) {
+    let bestScore = -1;
+    let bestIdx = -1;
+    for (let j = 0; j < withEmb.length; j++) {
+      if (i === j) continue;
+      const score = cosineSimilarity(withEmb[i].embedding, withEmb[j].embedding);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = j;
+      }
+    }
+    if (bestIdx >= 0 && bestScore >= PLAGIARISM_THRESHOLD) {
+      const target = withEmb[bestIdx];
+      withEmb[i].mostSimilar = {
+        submissionId: String(target._id),
+        score: bestScore,
+        studentName:
+          target.student?.name ||
+          target.student?.username ||
+          target.student?.email ||
+          "—",
+      };
+    }
+  }
+  return JSON.parse(JSON.stringify(decorated));
 }
 
 export async function reviewSubmission(
@@ -324,18 +459,53 @@ export async function reviewSubmission(
   if (typeof patch.feedback === "string") submission.feedback = patch.feedback;
   if (patch.grade === null) submission.grade = null;
   else if (typeof patch.grade === "number") {
-    if (patch.grade < 0 || patch.grade > 100) {
-      throw new Error("Grade must be between 0 and 100.");
+    if (patch.grade < 0 || patch.grade > 10) {
+      throw new Error("Grade must be between 0 and 10.");
     }
     submission.grade = patch.grade;
   }
 
   submission.status = "Reviewed";
+  submission.gradeApproved = true;
   submission.reviewedAt = new Date();
   submission.reviewedBy = user._id;
   await submission.save();
 
+  // Notify the student that their submission was reviewed.
+  try {
+    await createNotification({
+      recipient: String(submission.student),
+      kind: "submission_reviewed",
+      title: `Reviewed: ${assignment.title}`,
+      body:
+        submission.grade !== null
+          ? `Grade: ${submission.grade} / 10.`
+          : "Your submission has feedback.",
+      link: `/student/assignments/${assignment._id}`,
+      refId: String(submission._id),
+    });
+  } catch (err) {
+    console.log("submission_reviewed notify failed", err);
+  }
+
   revalidatePath(`/faculty/assignments/${assignment._id}`);
   revalidatePath(`/student/assignments/${assignment._id}`);
   return JSON.parse(JSON.stringify(submission));
+}
+
+/**
+ * Faculty trigger to re-run the auto-grade pipeline on a single submission
+ * (e.g. after editing the rubric, or if the original run errored).
+ */
+export async function rerunAutoGrade(submissionId: string) {
+  await requireRole("faculty", "admin");
+  await connectToDatabase();
+  const sub = await Submission.findById(submissionId);
+  if (!sub) throw new Error("Submission not found");
+  const assignment = await Assignment.findById(sub.assignment);
+  if (!assignment) throw new Error("Assignment not found");
+  await assertFacultyOwnsCourse(String(assignment.course));
+  await runAutoGrade(String(sub._id));
+  revalidatePath(`/faculty/assignments/${assignment._id}`);
+  return { ok: true };
 }

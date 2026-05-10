@@ -2,12 +2,14 @@
 
 import Course from "@/database/course.model";
 import Enrollment from "@/database/enrollment.model";
+import EnrollmentRequest from "@/database/enrollmentRequest.model";
 import User from "@/database/user.model";
 import { connectToDatabase } from "@/lib/mongoose";
 import {
   getCurrentMongoUser,
   requireRole,
 } from "@/actions/user.action";
+import { createNotification } from "@/actions/notification.action";
 import { revalidatePath } from "next/cache";
 
 const JOIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -167,8 +169,9 @@ export async function assertFacultyOwnsCourse(courseId: string) {
 }
 
 /**
- * Student: enroll in a course by its join code. Idempotent — re-using a code
- * the student is already enrolled in is a no-op.
+ * Student: requests enrollment in a course by its join code. Phase 6 changed
+ * the semantics from instant-enroll to request-and-approve — faculty must
+ * approve via /faculty/courses/[id]/enrollments before the student is added.
  */
 export async function joinCourseByCode(code: string) {
   const user = await requireRole("student");
@@ -184,11 +187,45 @@ export async function joinCourseByCode(code: string) {
     throw new Error("Faculty cannot enroll in their own course.");
   }
 
-  await Enrollment.updateOne(
-    { course: course._id, student: user._id },
-    { $setOnInsert: { course: course._id, student: user._id } },
-    { upsert: true },
-  );
+  // Already enrolled?
+  const existingEnrollment = await Enrollment.exists({
+    course: course._id,
+    student: user._id,
+  });
+  if (existingEnrollment) {
+    throw new Error("You are already enrolled in this course.");
+  }
+
+  // Already pending?
+  const existingPending = await EnrollmentRequest.findOne({
+    course: course._id,
+    student: user._id,
+    status: "pending",
+  });
+  if (existingPending) {
+    throw new Error("You already have a pending request for this course.");
+  }
+
+  const request = await EnrollmentRequest.create({
+    course: course._id,
+    student: user._id,
+    status: "pending",
+  });
+
+  // Notify the course faculty. refId on the request itself so each row is
+  // unique under the (recipient, kind, refId) constraint.
+  try {
+    await createNotification({
+      recipient: String(course.faculty),
+      kind: "enrollment_request_created",
+      title: `New enrollment request: ${course.title}`,
+      body: `${user.name || user.username || user.email} wants to join.`,
+      link: `/faculty/courses/${course._id}/enrollments`,
+      refId: String(request._id),
+    });
+  } catch (err) {
+    console.log("enrollment notify failed", err);
+  }
 
   revalidatePath("/student");
 

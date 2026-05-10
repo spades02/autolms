@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/actions/user.action";
 import { getCourseById } from "@/actions/course.action";
 import { getStudentCourseProgress } from "@/actions/analytics.action";
+import { getLectureProgressSummary } from "@/actions/progress.action";
 import CourseTabs from "@/components/portal/CourseTabs";
 import Stat from "@/components/portal/Stat";
 import SubmissionStatusBadge from "@/components/portal/SubmissionStatusBadge";
@@ -19,7 +20,10 @@ export default async function StudentProgressPage({
   const detail = await getCourseById(params.id);
   if (!detail) notFound();
 
-  const data = await getStudentCourseProgress(params.id);
+  const [data, lectureProgress] = await Promise.all([
+    getStudentCourseProgress(params.id),
+    getLectureProgressSummary(params.id),
+  ]);
   if (!data) notFound();
 
   const { quizzes, assignments, summary } = data;
@@ -39,6 +43,14 @@ export default async function StudentProgressPage({
       <CourseTabs courseId={params.id} audience="student" />
 
       <section className="grid gap-3 grid-cols-2 md:grid-cols-4">
+        <Stat
+          label="Lectures viewed"
+          value={`${lectureProgress.viewed} / ${lectureProgress.total}`}
+        />
+        <Stat
+          label="Lectures completed"
+          value={`${lectureProgress.completed} / ${lectureProgress.total}`}
+        />
         <Stat
           label="Quizzes attempted"
           value={`${summary.quizzesAttempted} / ${summary.quizzesTotal}`}
@@ -110,7 +122,7 @@ export default async function StudentProgressPage({
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     Due {new Date(a.dueDate).toLocaleString()}
-                    {a.grade !== null ? ` · grade ${a.grade}` : ""}
+                    {a.grade !== null ? ` · grade ${a.grade} / 10` : ""}
                   </div>
                 </Link>
               </li>

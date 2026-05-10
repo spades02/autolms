@@ -57,9 +57,11 @@ export default async function FacultyAssignmentPage({
               course: String(detail.course._id),
               title: detail.assignment.title,
               instructions: detail.assignment.instructions ?? "",
+              rubric: detail.assignment.rubric ?? "",
               dueDate: detail.assignment.dueDate,
               status: detail.assignment.status,
               allowLate: detail.assignment.allowLate,
+              attachments: detail.assignment.attachments ?? [],
             }}
           />
         </TabsContent>
@@ -76,6 +78,7 @@ export default async function FacultyAssignmentPage({
                   <TableHead>Submitted</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Grade</TableHead>
+                  <TableHead>Plagiarism</TableHead>
                   <TableHead>File</TableHead>
                   <TableHead></TableHead>
                 </TableRow>

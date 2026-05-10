@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Paperclip } from "lucide-react";
 import { requireRole } from "@/actions/user.action";
 import { getAssignmentById } from "@/actions/assignment.action";
 import AssignmentSubmitForm from "@/components/portal/AssignmentSubmitForm";
@@ -48,6 +49,30 @@ export default async function StudentAssignmentPage({
         </article>
       ) : null}
 
+      {Array.isArray(a.attachments) && a.attachments.length > 0 ? (
+        <section>
+          <h2 className="text-sm font-medium mb-2">Attachments</h2>
+          <ul className="grid gap-1">
+            {a.attachments.map((att: any, idx: number) => (
+              <li
+                key={`${att.url}-${idx}`}
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+              >
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                <a
+                  href={att.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 hover:underline truncate"
+                >
+                  {att.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <AssignmentSubmitForm
         assignmentId={String(a._id)}
         initialSubmission={
@@ -61,6 +86,7 @@ export default async function StudentAssignmentPage({
                 grade: detail.mySubmission.grade,
                 feedback: detail.mySubmission.feedback,
                 submittedAt: detail.mySubmission.submittedAt,
+                gradeApproved: detail.mySubmission.gradeApproved,
               }
             : null
         }

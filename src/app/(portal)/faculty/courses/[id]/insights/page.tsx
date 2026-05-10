@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/actions/user.action";
 import { getCourseById } from "@/actions/course.action";
 import { getFacultyCourseInsights } from "@/actions/analytics.action";
+import { getPendingRequestCount } from "@/actions/enrollmentRequest.action";
 import CourseTabs from "@/components/portal/CourseTabs";
 import Stat from "@/components/portal/Stat";
 import HistogramBar from "@/components/portal/HistogramBar";
@@ -19,7 +20,10 @@ export default async function FacultyInsightsPage({
   const detail = await getCourseById(params.id);
   if (!detail || detail.role !== "faculty") notFound();
 
-  const insights = await getFacultyCourseInsights(params.id);
+  const [insights, pendingCount] = await Promise.all([
+    getFacultyCourseInsights(params.id),
+    getPendingRequestCount(params.id),
+  ]);
 
   const lectureTotal = Object.values(insights.lectureCount).reduce(
     (sum, n) => sum + n,
@@ -38,7 +42,11 @@ export default async function FacultyInsightsPage({
         <h1 className="text-2xl font-semibold mt-1">{detail.course.title}</h1>
       </header>
 
-      <CourseTabs courseId={params.id} audience="faculty" />
+      <CourseTabs
+        courseId={params.id}
+        audience="faculty"
+        badges={{ pending: pendingCount }}
+      />
 
       <section className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Stat

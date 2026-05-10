@@ -4,8 +4,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { requireRole } from "@/actions/user.action";
 import { getLectureById } from "@/actions/lecture.action";
+import {
+  isLectureCompletedByMe,
+  recordLectureView,
+} from "@/actions/progress.action";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LectureChatbot from "@/components/portal/LectureChatbot";
+import MarkLectureCompleteButton from "@/components/portal/MarkLectureCompleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +23,10 @@ export default async function StudentLecturePage({
   const detail = await getLectureById(params.id);
   if (!detail) notFound();
 
+  // Side-effect: stamp first-view for this student. Idempotent + safe to fail.
+  await recordLectureView(params.id);
+  const completed = await isLectureCompletedByMe(params.id);
+
   return (
     <div className="max-w-4xl space-y-4">
       <Link
@@ -26,7 +35,15 @@ export default async function StudentLecturePage({
       >
         ← {detail.course.title}
       </Link>
-      <h1 className="text-2xl font-semibold">{detail.lecture.title}</h1>
+      <div className="flex items-start gap-3">
+        <h1 className="text-2xl font-semibold flex-1">
+          {detail.lecture.title}
+        </h1>
+        <MarkLectureCompleteButton
+          lectureId={String(detail.lecture._id)}
+          initiallyCompleted={completed}
+        />
+      </div>
 
       <video
         src={detail.lecture.videoUrl}
